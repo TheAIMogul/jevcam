@@ -26,10 +26,25 @@
   @media(max-width:900px){.wrap{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:var(--shadow);overflow:hidden}
-  .feed{position:relative;background:#000;aspect-ratio:1568/882}
+  .feed{position:relative;background:#0a0b0d;aspect-ratio:1568/882}
   .feed img{width:100%;height:100%;object-fit:contain;display:block}
-  .feed .badge{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.6);
-    color:#fff;font-size:12px;padding:5px 9px;border-radius:8px}
+  .feed .badge{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.62);
+    color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;backdrop-filter:blur(4px);
+    max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .feed .live{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;
+    background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;
+    padding:5px 10px;border-radius:20px;backdrop-filter:blur(4px)}
+  .feed .live i{width:8px;height:8px;border-radius:50%;background:#ff3b30;display:inline-block;
+    animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+  .feed .offline{position:absolute;inset:0;display:none;flex-direction:column;gap:10px;
+    align-items:center;justify-content:center;background:rgba(10,11,13,.82);color:#fff;text-align:center;padding:20px}
+  .feed.off .offline{display:flex}
+  .feed .offline .big{font-size:17px;font-weight:700}
+  .feed .offline .sub{font-size:13px;color:#c4c9d2;max-width:340px}
+  .feed .offline .spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.25);
+    border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .sect{padding:16px}
   .sect h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;
     color:var(--muted);margin:0 0 10px}
@@ -59,6 +74,25 @@
   .tag.no{background:var(--nobg);color:var(--no)}
   .err{background:#fdecec;color:#b42318;font-size:13px;padding:10px 12px;border-radius:10px;margin-top:10px}
   .foot{font-size:12px;color:var(--muted);text-align:center;padding:14px}
+
+  /* Alarm panel */
+  .alarm{margin-bottom:16px;border:1px solid var(--line)}
+  .alarm .body{padding:16px;display:flex;align-items:center;gap:14px;transition:background .2s}
+  .alarm .icon{font-size:30px;line-height:1}
+  .alarm .txt{flex:1;min-width:0}
+  .alarm .state{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+  .alarm .phrase{font-size:18px;font-weight:700;letter-spacing:-.01em;margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .alarm .mute{flex:none;background:var(--nobg);color:var(--ink);border:1px solid var(--line)}
+  .alarm .mute.on{background:#b42318;color:#fff;border-color:#b42318}
+  /* firing: flash red */
+  .alarm.firing{border-color:#e4352b}
+  .alarm.firing .body{animation:flashred .8s steps(1,end) infinite}
+  .alarm.firing .state,.alarm.firing .phrase{color:#fff}
+  .alarm.firing .icon{animation:shake .8s infinite}
+  @keyframes flashred{0%{background:#e4352b}50%{background:#7a0f0a}100%{background:#e4352b}}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  .alertcfg{display:grid;gap:8px}
 </style>
 </head>
 <body>
@@ -70,14 +104,52 @@
 
 <div class="wrap">
   <div class="card">
-    <div class="feed">
+    <div class="feed" id="feed">
       <img id="frame" alt="camera feed">
+      <span class="live"><i></i>LIVE</span>
       <span class="badge" id="fbadge">&nbsp;</span>
+      <div class="offline">
+        <div class="spin"></div>
+        <div class="big">Camera offline</div>
+        <div class="sub" id="offsub">Reconnecting to the sensor&hellip; check the ribbon cable is fully seated.</div>
+      </div>
     </div>
   </div>
 
   <div>
+    <div class="card alarm" id="alarm">
+      <div class="body">
+        <span class="icon" id="alarmIcon">🔔</span>
+        <div class="txt">
+          <div class="state" id="alarmState">armed</div>
+          <div class="phrase" id="alarmPhrase">&nbsp;</div>
+        </div>
+        <button class="mute" id="mute">Mute</button>
+      </div>
+    </div>
+
     <div class="card">
+      <div class="sect">
+        <h2>Alarm</h2>
+        <div class="alertcfg">
+          <div>
+            <label class="lbl" for="alertTarget">Sound the alarm when it sees</label>
+            <textarea id="alertTarget" style="min-height:52px" spellcheck="false" placeholder="a person wearing a New York (NY) shirt"></textarea>
+          </div>
+          <div>
+            <label class="lbl" for="alertPhrase">Say this out loud</label>
+            <input id="alertPhrase" type="text" placeholder="New Yorker Alert"
+              style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;background:#fbfcfd">
+          </div>
+          <div class="row" style="margin-top:4px">
+            <label class="lbl" style="margin:0;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="alertEnabled" checked> Alarm enabled
+            </label>
+            <button id="applyAlert" style="margin-left:auto">Save alarm</button>
+          </div>
+          <div class="hint">Re-announces every 10&nbsp;s while the object stays on screen.</div>
+        </div>
+      </div>
       <div class="sect">
         <h2>What should it look for?</h2>
         <label class="lbl" for="targets">One object per line, in plain English (max 8)</label>
@@ -103,44 +175,109 @@
 
 <script>
 let paused = false;
+let muted = false;
+try{ muted = localStorage.getItem("jevcam_muted")==="1"; }catch(e){}
+let lastSpoke = 0;          // epoch ms of last announcement
+const SPEAK_EVERY = 10000;  // 10 seconds
 const $ = s => document.querySelector(s);
 
 async function pushConfig(extra={}){
   const targets = $("#targets").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,8);
   const interval = parseFloat($("#interval").value)||5;
-  const body = Object.assign({targets, interval}, extra);
+  const body = Object.assign({
+    targets, interval,
+    alert_target: $("#alertTarget").value.trim(),
+    alert_phrase: $("#alertPhrase").value.trim(),
+    alert_enabled: $("#alertEnabled").checked,
+  }, extra);
   const r = await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   return r.json();
 }
 $("#apply").onclick = ()=>pushConfig();
+$("#applyAlert").onclick = ()=>{ lastSpoke = 0; pushConfig(); };
 $("#pause").onclick = async ()=>{
   paused = !paused;
   await pushConfig({running: !paused});
   $("#pause").textContent = paused ? "Resume" : "Pause";
 };
 
-let targetsFocused = false;
-$("#targets").addEventListener("focus",()=>targetsFocused=true);
-$("#targets").addEventListener("blur",()=>targetsFocused=false);
+function setMute(v){
+  muted = v;
+  try{ localStorage.setItem("jevcam_muted", v?"1":"0"); }catch(e){}
+  const b = $("#mute");
+  b.textContent = v ? "Unmute" : "Mute";
+  b.classList.toggle("on", v);
+  if(v && window.speechSynthesis) window.speechSynthesis.cancel();
+}
+$("#mute").onclick = ()=>setMute(!muted);
+setMute(muted);
+
+function speak(text){
+  if(!text || muted || !window.speechSynthesis) return;
+  try{
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+let focusGuard = {};
+["targets","alertTarget","alertPhrase","interval"].forEach(id=>{
+  const el = $("#"+id);
+  el.addEventListener("focus",()=>focusGuard[id]=true);
+  el.addEventListener("blur",()=>focusGuard[id]=false);
+});
+function hydrate(id,val){ const el=$("#"+id);
+  if(!focusGuard[id] && document.activeElement!==el && el.value.trim()==="" && val) el.value=val; }
 
 function refreshImg(){
   $("#frame").src = "/latest.jpg?t=" + Date.now();
+}
+
+function updateAlarm(al){
+  al = al || {};
+  const card = $("#alarm"), icon = $("#alarmIcon");
+  const active = !!(al.active && al.enabled);
+  card.classList.toggle("firing", active);
+  if(active){
+    $("#alarmState").textContent = "⚠ ALERT";
+    $("#alarmPhrase").textContent = al.phrase || "Alert";
+    icon.textContent = muted ? "🔕" : "🚨";
+    // announce immediately on trigger, then every 10s while present
+    if(!muted && Date.now()-lastSpoke >= SPEAK_EVERY){
+      speak(al.phrase || "Alert"); lastSpoke = Date.now();
+    }
+  }else{
+    lastSpoke = 0;  // reset so the next detection speaks right away
+    if(al.enabled===false){ $("#alarmState").textContent="disarmed"; icon.textContent="🔕"; $("#alarmPhrase").textContent="—"; }
+    else{ $("#alarmState").textContent="armed"; icon.textContent="🔔";
+          $("#alarmPhrase").textContent = al.target ? ("watching: "+al.target) : "no alarm target set"; }
+  }
 }
 
 async function poll(){
   try{
     const r = await fetch("/api/state"); const s = await r.json();
     const cfg = s.config||{};
-    if(!targetsFocused && document.activeElement!==$("#targets"))
-      if($("#targets").value.trim()==="") $("#targets").value=(cfg.targets||[]).join("\n");
+    hydrate("targets",(cfg.targets||[]).join("\n"));
+    hydrate("alertTarget",cfg.alert_target||"");
+    hydrate("alertPhrase",cfg.alert_phrase||"");
     if(document.activeElement!==$("#interval")) $("#interval").value = cfg.interval||5;
-    $("#statusdot").style.background = cfg.running ? "var(--ok)" : "var(--no)";
-    $("#meta").innerHTML = (cfg.running?"running":"paused")
+    if(document.activeElement!==$("#alertEnabled")) $("#alertEnabled").checked = cfg.alert_enabled!==false;
+    updateAlarm(s.alert);
+    const camErr = s.error && /camera|ribbon|sensor/i.test(s.error);
+    $("#feed").classList.toggle("off", !!camErr);
+    $("#statusdot").style.background = camErr ? "var(--no)" : (cfg.running ? "var(--ok)" : "var(--no)");
+    const fps = s.latency_ms ? (1000/s.latency_ms).toFixed(1)+" fps" : "&mdash;";
+    $("#meta").innerHTML = (camErr?"camera offline":(cfg.running?"running":"paused"))
+      + " &middot; " + fps
       + " &middot; " + (s.latency_ms!=null? s.latency_ms+" ms":"&mdash;")
-      + " &middot; frame #" + (s.frames||0)
+      + " &middot; #" + (s.frames||0)
       + (s.ts? " &middot; "+s.ts.split(" ")[1]:"");
     const dets = s.detections||[];
-    $("#fbadge").textContent = dets.filter(d=>d.present).map(d=>d.label).join(" · ") || "no targets found";
+    $("#fbadge").textContent = camErr ? "" :
+      (dets.filter(d=>d.present).map(d=>d.label).join(" · ") || "no targets found");
     const box = $("#dets");
     if(!dets.length){ box.innerHTML='<div class="hint">no targets set &mdash; add some above.</div>'; }
     else{
@@ -156,7 +293,7 @@ async function poll(){
         </div>`;
       }).join("");
     }
-    $("#err").innerHTML = s.error? `<div class="err">Jev error: ${esc(s.error)}</div>`:"";
+    $("#err").innerHTML = (s.error && !camErr)? `<div class="err">${esc(s.error)}</div>`:"";
   }catch(e){ $("#meta").textContent="offline"; $("#statusdot").style.background="var(--no)"; }
 }
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}

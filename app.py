@@ -40,6 +40,10 @@ config = {
     "interval": 5.0,
     "targets": ["person", "cell phone", "laptop"],
     "running": True,
+    # Alarm: when alert_target is seen, the UI flashes red + speaks alert_phrase
+    "alert_target": "a person wearing a New York (NY) shirt",
+    "alert_phrase": "New Yorker Alert",
+    "alert_enabled": True,
 }
 CONFIG_LOCK = threading.Lock()
 
@@ -50,6 +54,7 @@ state = {
     "latency_ms": None,
     "error": None,
     "frames": 0,
+    "alert": {"active": False, "presence": None, "phrase": "", "target": "", "enabled": True},
 }
 STATE_LOCK = threading.Lock()
 
@@ -75,7 +80,7 @@ TYPESAFE_KEY = load_key()
 import subprocess  # noqa: E402
 
 CAP_PATH = "/tmp/jevcam_cap.jpg"
-CAP_TIMEOUT = 12          # seconds; kill a stuck capture
+CAP_TIMEOUT = 6           # seconds; kill a stuck capture (fast recovery on cable blips)
 RPICAM = "rpicam-still"
 
 
@@ -106,7 +111,7 @@ def capture_rgb():
 # ---------------------------------------------------------------------------
 # Jev
 # ---------------------------------------------------------------------------
-def build_request(img_b64, targets):
+def build_request(img_b64, targets, alert_target=None):
     questions = {}
     for i, t in enumerate(targets):
         questions[f"present_{i}"] = {
@@ -117,6 +122,11 @@ def build_request(img_b64, targets):
             "type": "box",
             "instructions": f"the {t} in `photo`",
         }
+    if alert_target:
+        questions["alert_present"] = {
+            "type": "noul",
+            "instructions": f"Is there {alert_target} clearly visible in `photo`?",
+        }
     return {
         "model": MODEL,
         "state": {"photo": "frame"},
@@ -125,8 +135,8 @@ def build_request(img_b64, targets):
     }
 
 
-def call_jev(img_b64, targets):
-    body = build_request(img_b64, targets)
+def call_jev(img_b64, targets, alert_target=None):
+    body = build_request(img_b64, targets, alert_target)
     r = requests.post(
         TYPESAFE_URL,
         headers={
@@ -210,20 +220,34 @@ def loop():
             interval = config["interval"]
             targets = list(config["targets"])
             running = config["running"]
-        if not running or not targets:
+            alert_target = config["alert_target"].strip()
+            alert_phrase = config["alert_phrase"]
+            alert_enabled = config["alert_enabled"]
+        if not running or (not targets and not alert_target):
             _store_plain(targets)
+            with STATE_LOCK:
+                state["alert"] = {"active": False, "presence": None,
+                                  "phrase": alert_phrase, "target": alert_target,
+                                  "enabled": alert_enabled}
             time.sleep(min(interval, 2.0))
             continue
         t0 = time.time()
         err = None
         detections = []
+        alert = {"active": False, "presence": None, "phrase": alert_phrase,
+                 "target": alert_target, "enabled": alert_enabled}
         try:
             img = capture_rgb()
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=88)
             img_b64 = base64.b64encode(buf.getvalue()).decode()
-            resp = call_jev(img_b64, targets)
+            resp = call_jev(img_b64, targets, alert_target or None)
             detections = parse_answers(resp, targets)
+            if alert_target:
+                ap = resp.get("answers", {}).get("alert_present", {}).get("noul")
+                alert["presence"] = ap
+                alert["active"] = bool(alert_enabled and ap is not None
+                                       and ap >= PRESENCE_DRAW_THRESHOLD)
         except Exception as e:  # noqa: BLE001
             err = str(e)
         latency = int((time.time()-t0)*1000)
@@ -239,7 +263,7 @@ def loop():
             state.update({
                 "ts": ts_str, "detections": detections,
                 "latency_ms": latency, "error": err,
-                "frames": state["frames"] + 1,
+                "frames": state["frames"] + 1, "alert": alert,
             })
         dt = time.time() - t0
         time.sleep(max(0.1, interval - dt))
@@ -301,6 +325,12 @@ def api_config():
                 pass
         if "running" in data:
             config["running"] = bool(data["running"])
+        if "alert_target" in data:
+            config["alert_target"] = str(data["alert_target"]).strip()[:140]
+        if "alert_phrase" in data:
+            config["alert_phrase"] = str(data["alert_phrase"]).strip()[:120]
+        if "alert_enabled" in data:
+            config["alert_enabled"] = bool(data["alert_enabled"])
         out = dict(config)
     return jsonify(out)
 
