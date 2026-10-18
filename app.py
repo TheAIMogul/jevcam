@@ -65,6 +65,60 @@ state = {
 }
 STATE_LOCK = threading.Lock()
 
+# Timeline for the dashboard: recent presence samples, and an event log of
+# changes (detected / cleared, alarm on / off, camera and Jev errors).
+START_MS = int(time.time() * 1000)
+HISTORY = deque(maxlen=240)        # one sample per Jev response, ~4 min at 1/s
+EVENTS = deque(maxlen=150)
+HITS = {}                          # label -> times it went from absent to present
+TIMELINE_LOCK = threading.Lock()
+_prev = {"present": {}, "alert": False, "camera_ok": None, "error": None, "alarms": 0}
+
+
+def _event(kind, label, value=None):
+    EVENTS.append({"t": int(time.time() * 1000), "kind": kind, "label": label, "value": value})
+
+
+def record_sample(detections, alert):
+    with TIMELINE_LOCK:
+        HISTORY.append({"t": int(time.time() * 1000),
+                        "p": {d["label"]: d["presence"] for d in detections},
+                        "a": alert.get("presence")})
+        labels = {d["label"] for d in detections}
+        for gone in set(_prev["present"]) - labels:      # target removed from the list
+            del _prev["present"][gone]
+        for d in detections:
+            was = _prev["present"].get(d["label"], False)
+            if d["present"] and not was:
+                _event("detected", d["label"], d["presence"])
+                HITS[d["label"]] = HITS.get(d["label"], 0) + 1
+            elif was and not d["present"]:
+                _event("cleared", d["label"], d["presence"])
+            _prev["present"][d["label"]] = d["present"]
+        if alert["active"] != _prev["alert"]:
+            _event("alarm" if alert["active"] else "alarm_end", alert.get("phrase") or "alarm",
+                   alert.get("presence"))
+            if alert["active"]:
+                _prev["alarms"] += 1
+            _prev["alert"] = alert["active"]
+        _prev["error"] = None
+
+
+def record_status(camera_ok=None, error=None):
+    with TIMELINE_LOCK:
+        if camera_ok is not None and camera_ok != _prev["camera_ok"]:
+            # only real drop-outs: offline after it was live, online after a logged drop-out
+            if not camera_ok and _prev["camera_ok"] is True:
+                _event("camera_off", "camera")
+                _prev["camera_dropped"] = True
+            elif camera_ok and _prev.get("camera_dropped"):
+                _event("camera_on", "camera")
+                _prev["camera_dropped"] = False
+            _prev["camera_ok"] = camera_ok
+        if error and error != _prev["error"]:
+            _event("error", error[:120])
+            _prev["error"] = error
+
 
 def load_key():
     with open(TYPESAFE_KEY_FILE) as f:
@@ -321,10 +375,12 @@ def detect_loop():
             continue
         _, jpg = cam.latest()
         if jpg is None or not cam.ok():
+            record_status(camera_ok=False)
             with STATE_LOCK:
                 state["alert"] = idle_alert
             time.sleep(0.5)
             continue
+        record_status(camera_ok=True)
         t0 = time.time()
         with STATE_LOCK:
             state["frame_seq"] += 1
@@ -341,6 +397,10 @@ def detect_loop():
         except Exception as e:  # noqa: BLE001
             err = str(e)
         latency = int((time.time() - t0) * 1000)
+        if err is None:
+            record_sample(detections, alert)
+        else:
+            record_status(error=err)
         with STATE_LOCK:
             state["frames"] += 1
             state["latency_ms"] = latency
@@ -417,6 +477,13 @@ def api_state():
     if not s["camera_ok"]:
         s["error"] = cam.error or "camera offline - check the ribbon cable"
     return jsonify(s)
+
+
+@app.route("/api/timeline")
+def api_timeline():
+    with TIMELINE_LOCK:
+        return jsonify({"samples": list(HISTORY), "events": list(EVENTS)[-80:],
+                        "hits": dict(HITS), "alarms": _prev["alarms"], "started": START_MS})
 
 
 @app.route("/api/config", methods=["POST"])

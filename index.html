@@ -4,414 +4,569 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JevCam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
-    --bg:#f4f5f7; --panel:#ffffff; --ink:#15181d; --muted:#5b6472;
-    --line:#e3e6ea; --accent:#2563eb; --accent-ink:#ffffff;
-    --ok:#15935b; --okbg:#e7f6ee; --no:#9aa3b0; --nobg:#f0f2f5;
-    --shadow:0 1px 3px rgba(20,24,29,.08),0 8px 24px rgba(20,24,29,.06);
+    --gap:#d5dae0; --panel:#ffffff; --panel2:#f6f7f9; --line:#e1e5ea;
+    --ink:#1c2127; --muted:#5f6b7c; --faint:#8f99a8;
+    --blue:#2d72d2; --green:#238551; --red:#cd4246; --orange:#c87619;
+    --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    line-height:1.45}
-  header{display:flex;align-items:center;gap:12px;padding:16px 20px;
-    background:var(--panel);border-bottom:1px solid var(--line)}
-  header .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);
-    box-shadow:0 0 0 4px var(--okbg)}
-  header h1{font-size:18px;margin:0;font-weight:650;letter-spacing:-.01em}
-  header .meta{margin-left:auto;font-size:13px;color:var(--muted);text-align:right}
-  .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;
-    grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
-  body{transition:padding-top .15s}
-  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    box-shadow:var(--shadow);overflow:hidden}
-  .feed{position:relative;background:#0a0b0d;aspect-ratio:16/9;overflow:hidden}
-  .feed img{width:100%;height:100%;object-fit:contain;display:block}
-  .feed .boxes{position:absolute;inset:0;pointer-events:none}
-  .feed .bx{position:absolute;border:3px solid;border-radius:4px;transition:all .35s ease-out}
-  .feed .bx b{position:absolute;left:-3px;top:-24px;font-size:12px;font-weight:800;color:#000;
-    padding:3px 7px;border-radius:4px 4px 4px 0;white-space:nowrap}
-  .feed .badge{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.62);
-    color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;backdrop-filter:blur(4px);
-    max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .feed .live{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:7px;
-    background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;
-    padding:5px 10px;border-radius:20px;backdrop-filter:blur(4px)}
-  .feed .live i{width:8px;height:8px;border-radius:50%;background:#ff3b30;display:inline-block;
-    animation:pulse 1.4s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
-  .feed .leds{position:absolute;top:10px;right:10px;display:flex;gap:8px}
-  .feed .leds span{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);color:#fff;
-    font-size:13px;font-weight:800;letter-spacing:.08em;padding:7px 13px;border-radius:22px;backdrop-filter:blur(4px)}
-  .led{width:15px;height:15px;border-radius:50%;display:inline-block;border:2px solid rgba(255,255,255,.35)}
-  .led.jev{background:#14532d}
-  .led.frm{background:#1e3a8a}
-  .led.jev.blink{animation:blinkjev 1s ease-out}
-  .led.frm.blink{animation:blinkfrm 1s ease-out}
-  .leds span.pj.blink{animation:pilljev 1s ease-out}
-  .leds span.pf.blink{animation:pillfrm 1s ease-out}
-  @keyframes blinkjev{0%{background:#4ade80;box-shadow:0 0 18px 7px #4ade80}100%{background:#14532d;box-shadow:none}}
-  @keyframes blinkfrm{0%{background:#60a5fa;box-shadow:0 0 18px 7px #60a5fa}100%{background:#1e3a8a;box-shadow:none}}
-  @keyframes pilljev{0%{background:rgba(22,163,74,.9)}100%{background:rgba(0,0,0,.6)}}
-  @keyframes pillfrm{0%{background:rgba(37,99,235,.9)}100%{background:rgba(0,0,0,.6)}}
-  .feed .offline{position:absolute;inset:0;display:none;flex-direction:column;gap:10px;
-    align-items:center;justify-content:center;background:rgba(10,11,13,.82);color:#fff;text-align:center;padding:20px}
-  .feed.off .offline{display:flex}
-  .feed .offline .big{font-size:17px;font-weight:700}
-  .feed .offline .sub{font-size:13px;color:#c4c9d2;max-width:340px}
-  .feed .offline .spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.25);
-    border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .sect{padding:16px}
-  .sect h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;
-    color:var(--muted);margin:0 0 10px}
-  .sect+.sect{border-top:1px solid var(--line)}
-  label.lbl{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
-  textarea{width:100%;min-height:96px;resize:vertical;border:1px solid var(--line);
-    border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;color:var(--ink);
-    background:#fbfcfd}
-  textarea:focus{outline:2px solid var(--accent);border-color:var(--accent)}
-  .hint{font-size:12px;color:var(--muted);margin-top:6px}
-  .row{display:flex;gap:10px;align-items:center;margin-top:12px}
-  input[type=number]{width:72px;border:1px solid var(--line);border-radius:8px;
-    padding:8px;font:inherit}
-  button{border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;
-    font-size:14px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
-  button.ghost{background:var(--nobg);color:var(--ink)}
-  button:active{transform:translateY(1px)}
-  .det{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
-  .det:last-child{border-bottom:0}
-  .swatch{width:12px;height:12px;border-radius:3px;flex:none}
-  .det .name{font-size:14px;font-weight:550;flex:none;min-width:92px}
-  .bar{flex:1;height:8px;background:var(--nobg);border-radius:6px;overflow:hidden}
-  .bar>span{display:block;height:100%;background:var(--accent)}
-  .pct{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:40px;text-align:right}
-  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
-  .tag.yes{background:var(--okbg);color:var(--ok)}
-  .tag.no{background:var(--nobg);color:var(--no)}
-  .err{background:#fdecec;color:#b42318;font-size:13px;padding:10px 12px;border-radius:10px;margin-top:10px}
-  .foot{font-size:12px;color:var(--muted);text-align:center;padding:14px}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--gap)}
+  body{color:var(--ink);font-family:var(--sans);font-size:13px;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit}
 
-  /* Alarm panel */
-  .alarm{margin-bottom:16px;border:1px solid var(--line)}
-  .alarm .body{padding:16px;display:flex;align-items:center;gap:14px;transition:background .2s}
-  .alarm .icon{font-size:30px;line-height:1}
-  .alarm .txt{flex:1;min-width:0}
-  .alarm .state{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
-  .alarm .phrase{font-size:18px;font-weight:700;letter-spacing:-.01em;margin-top:2px;
+  /* full-screen grid: hairline gaps, no margins */
+  .app{position:fixed;inset:0;display:grid;gap:1px;background:var(--gap);
+    grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr) minmax(0,1fr);
+    grid-template-rows:46px minmax(0,1fr) minmax(0,.4fr);
+    grid-template-areas:"top top top" "video video map" "timeline events targets"}
+  .panel{background:var(--panel);display:flex;flex-direction:column;min-width:0;min-height:0}
+  .ph{flex:none;height:30px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:0 12px;background:var(--panel2);border-bottom:1px solid var(--line);
+    font:600 10.5px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .ph .meta{font:500 10.5px var(--mono);letter-spacing:.02em;text-transform:none;color:var(--faint);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .alarm .mute{flex:none;background:var(--nobg);color:var(--ink);border:1px solid var(--line)}
-  .alarm .mute.on{background:#b42318;color:#fff;border-color:#b42318}
-  /* firing: flash red */
-  .alarm.firing{border-color:#e4352b}
-  .alarm.firing .body{animation:flashred .8s steps(1,end) infinite}
-  .alarm.firing .state,.alarm.firing .phrase{color:#fff}
-  .alarm.firing .icon{animation:shake .8s infinite}
-  @keyframes flashred{0%{background:#e4352b}50%{background:#7a0f0a}100%{background:#e4352b}}
-  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
-  .alertcfg{display:grid;gap:8px}
+  .phbtn{border:1px solid var(--line);background:#fff;border-radius:3px;padding:2px 8px;cursor:pointer;
+    font:600 10px var(--sans);letter-spacing:.08em;color:var(--blue)}
+  .phbtn:hover{border-color:var(--blue)}
 
-  /* Full-width SCREAMER banner */
-  #screamer{position:fixed;top:0;left:0;width:100vw;z-index:9999;display:none;
-    align-items:center;justify-content:center;gap:clamp(12px,4vw,56px);
-    padding:clamp(14px,3.5vh,48px) 16px;background:#e4352b;color:#fff;
-    box-shadow:0 10px 40px rgba(0,0,0,.4);border-bottom:4px solid #fff}
-  #screamer.show{display:flex;animation:screamflash .55s steps(1,end) infinite}
-  #screamer .ph{font-weight:900;letter-spacing:-.02em;line-height:1;text-align:center;
-    font-size:clamp(2rem,8vw,7rem);text-transform:uppercase;
-    text-shadow:0 3px 0 rgba(0,0,0,.25)}
-  #screamer .siren{height:clamp(3.5rem,11vw,10rem);width:auto;flex:none;display:block}
-  #screamer .siren.flip{transform:scaleX(-1)}
-  @keyframes screamflash{0%{background:#e4352b}50%{background:#000}100%{background:#e4352b}}
-  @media(prefers-reduced-motion:reduce){#screamer.show{animation:none}}
+  /* top bar */
+  .top{grid-area:top;background:var(--panel);display:flex;align-items:center;gap:14px;padding:0 12px;min-width:0}
+  .brand{display:flex;align-items:center;gap:9px;white-space:nowrap}
+  .brand .mark{width:26px;height:26px;border-radius:4px;background:var(--blue);color:#fff;display:grid;place-items:center;font:800 14px var(--sans)}
+  .brand b{font:800 14px var(--sans);letter-spacing:.06em}
+  .brand .site{font:500 12px var(--mono);color:var(--muted)}
+  .alertbar{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:10px;height:32px;
+    border-radius:4px;border:1px solid var(--line);background:var(--panel2);padding:0 10px;
+    font:700 12px var(--mono);letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+  .alertbar .txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .alertbar .siren{height:26px;width:auto;display:none}
+  .alertbar .siren.flip{transform:scaleX(-1)}
+  .alertbar.firing{background:#fbe9e9;border-color:#e9a3a5;color:var(--red);animation:calm 2.2s ease-in-out infinite}
+  .alertbar.firing .siren{display:block}
+  .alertbar.off{opacity:.6}
+  @keyframes calm{0%,100%{box-shadow:0 0 0 0 rgba(205,66,70,0)}50%{box-shadow:0 0 0 4px rgba(205,66,70,.18)}}
+  .chips{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1px solid var(--line);border-radius:3px;
+    font:500 10.5px var(--mono);color:var(--muted);background:#fff}
+  .chip b{color:var(--ink);font-weight:700}
+  .chip i{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .chip.bad i{background:var(--red)} .chip.bad b{color:var(--red)}
+  .led{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .led.jev{background:#a7d7bc} .led.frm{background:#b3c9ef}
+  .chip.pj.blink{animation:pilljev 1s ease-out} .chip.pf.blink{animation:pillfrm 1s ease-out}
+  .led.jev.blink{animation:ledjev 1s ease-out} .led.frm.blink{animation:ledfrm 1s ease-out}
+  @keyframes ledjev{0%{background:#22c55e;box-shadow:0 0 10px 3px #22c55e}100%{background:#a7d7bc;box-shadow:none}}
+  @keyframes ledfrm{0%{background:#3b82f6;box-shadow:0 0 10px 3px #3b82f6}100%{background:#b3c9ef;box-shadow:none}}
+  @keyframes pilljev{0%{background:#dcfce7;border-color:#22c55e}100%{background:#fff}}
+  @keyframes pillfrm{0%{background:#dbeafe;border-color:#3b82f6}100%{background:#fff}}
+  .clock{font:600 13px var(--mono);color:var(--ink);white-space:nowrap}
+  .tb{height:28px;padding:0 10px;border:1px solid var(--line);border-radius:3px;background:#fff;cursor:pointer;
+    font:700 10.5px var(--sans);letter-spacing:.08em;color:var(--ink);white-space:nowrap}
+  .tb:hover{border-color:var(--blue);color:var(--blue)}
+  .tb.on{background:var(--red);border-color:var(--red);color:#fff}
+
+  /* video */
+  .video{grid-area:video}
+  .feed{position:relative;flex:1;min-height:0;background:#0b0d10;overflow:hidden}
+  .feed img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .video.firing .feed::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 3px var(--red);
+    animation:calm 2.2s ease-in-out infinite;pointer-events:none}
+  .boxes{position:absolute;inset:0;pointer-events:none}
+  .bx{position:absolute;border:2px solid;transition:all .35s ease-out}
+  .bx b{position:absolute;left:-2px;top:-21px;font:700 10.5px var(--mono);color:#fff;padding:3px 6px;white-space:nowrap}
+  .bx.inside b{top:0}
+  .corners{position:absolute;inset:12px;pointer-events:none;
+    background:
+      linear-gradient(#fff,#fff) top left/18px 2px no-repeat, linear-gradient(#fff,#fff) top left/2px 18px no-repeat,
+      linear-gradient(#fff,#fff) top right/18px 2px no-repeat, linear-gradient(#fff,#fff) top right/2px 18px no-repeat,
+      linear-gradient(#fff,#fff) bottom left/18px 2px no-repeat, linear-gradient(#fff,#fff) bottom left/2px 18px no-repeat,
+      linear-gradient(#fff,#fff) bottom right/18px 2px no-repeat, linear-gradient(#fff,#fff) bottom right/2px 18px no-repeat;opacity:.7}
+  .vtag{position:absolute;font:600 10.5px var(--mono);color:#fff;background:rgba(10,12,16,.6);padding:4px 8px;border-radius:2px;
+    max-width:calc(100% - 40px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vtag.tl{top:20px;left:20px} .vtag.bl{bottom:20px;left:20px} .vtag.br{bottom:20px;right:20px}
+  .vtag.tl i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;margin-right:6px;animation:rec 1.4s ease-in-out infinite}
+  @keyframes rec{50%{opacity:.25}}
+  .offline{position:absolute;inset:0;display:none;flex-direction:column;gap:10px;align-items:center;justify-content:center;
+    background:rgba(11,13,16,.86);color:#fff;text-align:center;padding:20px;font:600 14px var(--sans)}
+  .offline small{font:400 12px var(--sans);color:#b8c0cc;max-width:340px}
+  .feed.off .offline{display:flex}
+  .spin{width:24px;height:24px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* map */
+  .map{grid-area:map}
+  .mapwrap{position:relative;flex:1;min-height:0}
+  #map{position:absolute;inset:0;background:#eef1f4}
+  .mapread{position:absolute;left:8px;top:8px;z-index:500;background:rgba(255,255,255,.94);border:1px solid var(--line);
+    border-radius:3px;padding:6px 9px;font:500 10.5px var(--mono);color:var(--muted);line-height:1.6;pointer-events:none}
+  .mapread b{color:var(--ink);font-weight:700}
+  .pin{position:relative;width:16px;height:16px}
+  .pin i{position:absolute;inset:3px;border-radius:50%;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+  .pin::before{content:"";position:absolute;inset:-14px;border-radius:50%;border:2px solid var(--blue);opacity:0}
+  .pin.ping::before{animation:ping 1.1s ease-out}
+  .pin.alert i{background:var(--red)} .pin.alert::before{border-color:var(--red);animation:ping 1.6s ease-out infinite}
+  @keyframes ping{0%{transform:scale(.3);opacity:.9}100%{transform:scale(1.4);opacity:0}}
+  .leaflet-container{font-family:var(--sans)}
+  .leaflet-tile-pane{filter:grayscale(1) brightness(1.04) contrast(.92)}
+  .leaflet-control-attribution{font-size:9px!important}
+
+  /* timeline */
+  .timeline{grid-area:timeline}
+  .spark{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
+  .srow{flex:1 1 0;min-height:30px;display:grid;grid-template-columns:minmax(70px,.9fr) minmax(0,2.2fr) 44px;align-items:stretch;gap:10px;
+    padding:4px 12px;border-bottom:1px solid var(--line)}
+  .srow:last-child{border-bottom:0}
+  .srow .n{align-self:center;font:600 11px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+  .srow .n i{width:8px;height:8px;border-radius:2px;flex:none}
+  .srow svg{width:100%;height:100%;min-height:20px;display:block}
+  .srow .v{align-self:center}
+  .srow .v{font:700 11px var(--mono);text-align:right}
+
+  /* events */
+  .events{grid-area:events}
+  .evlist{flex:1;min-height:0;overflow:auto;font:500 11px var(--mono)}
+  .ev{display:grid;grid-template-columns:62px 92px minmax(0,1fr) 38px;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--line)}
+  .ev .t{color:var(--faint)} .ev .l{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ev .p{text-align:right;color:var(--muted)}
+  .tag{font:700 9.5px var(--mono);letter-spacing:.05em;padding:2px 5px;border-radius:2px;text-align:center;white-space:nowrap}
+  .tag.detected,.tag.camera_on{background:#e2f2e9;color:var(--green)}
+  .tag.cleared,.tag.alarm_end{background:#eef0f3;color:var(--muted)}
+  .tag.alarm{background:#fbe1e2;color:var(--red)}
+  .tag.camera_off,.tag.error{background:#fbeedc;color:var(--orange)}
+  .empty{padding:14px 12px;color:var(--faint);font:500 11px var(--mono)}
+
+  /* targets table */
+  .targets{grid-area:targets}
+  .tbl{flex:0 1 auto;min-height:0;overflow:auto}
+  .kpis{flex:1 0 64px;display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .kpi{background:var(--panel2);display:flex;flex-direction:column;justify-content:center;padding:6px 12px;min-width:0}
+  .kpi span{font:600 9.5px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+  .kpi b{font:700 clamp(16px,1.6vw,24px) var(--mono);color:var(--ink);margin-top:2px;white-space:nowrap}
+  .kpi.red b{color:var(--red)}
+  @media (max-height:800px) and (min-width:981px){.kpis{display:none}.tbl{flex:1 1 auto}}
+  .tr{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(70px,1fr) 70px 34px 54px;gap:8px;align-items:center;padding:6px 12px;
+    border-bottom:1px solid var(--line);font:500 11px var(--mono)}
+  .tr.h{font:600 9.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:5px 12px;position:sticky;top:0;background:#fff;z-index:1}
+  .tr .nm{font:600 11.5px var(--sans);display:flex;align-items:center;gap:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tr .nm i{width:8px;height:8px;border-radius:2px;flex:none}
+  .bar{position:relative;height:6px;background:#eef0f3;border-radius:1px;overflow:hidden}
+  .bar span{position:absolute;inset:0 auto 0 0;border-radius:1px}
+  .bar em{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--faint)}
+  .st{font:700 9.5px var(--mono);letter-spacing:.05em}
+  .st.yes{color:var(--green)} .st.no{color:var(--faint)} .st.alarm{color:var(--red)}
+  .tr.alarmrow{background:#fdf6f6}
+  .tr .r{text-align:right;color:var(--muted)}
+
+  /* configure drawer */
+  .scrim{position:fixed;inset:0;background:rgba(28,33,39,.28);opacity:0;pointer-events:none;transition:opacity .2s;z-index:900}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);background:#fff;border-left:1px solid var(--gap);z-index:901;
+    transform:translateX(102%);transition:transform .25s ease;display:flex;flex-direction:column}
+  body.cfg .scrim{opacity:1;pointer-events:auto} body.cfg .drawer{transform:none}
+  .drawer .body{flex:1;overflow:auto;padding:16px}
+  .fld{margin-bottom:16px}
+  .fld label{display:block;font:600 10.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .fld textarea,.fld input[type=text],.fld input[type=number]{width:100%;border:1px solid var(--gap);border-radius:3px;padding:8px 10px;font:500 12.5px var(--mono);color:var(--ink);background:#fbfcfd}
+  .fld textarea{min-height:120px;resize:vertical}
+  .fld textarea:focus,.fld input:focus{outline:2px solid var(--blue);border-color:var(--blue)}
+  .hint{font:400 11.5px var(--sans);color:var(--faint);margin-top:5px}
+  .row{display:flex;gap:8px;align-items:center}
+  .btn{height:32px;padding:0 14px;border:0;border-radius:3px;background:var(--blue);color:#fff;font:700 11px var(--sans);letter-spacing:.06em;cursor:pointer}
+  .btn.ghost{background:#eef0f3;color:var(--ink)}
+  .sect{font:700 11px var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin:6px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .err{background:#fbeedc;color:var(--orange);font:500 11.5px var(--mono);padding:8px 10px;border-radius:3px;margin-top:8px}
+
+  /* narrow screens: stack and scroll */
+  @media (max-width:980px){
+    html,body{overflow:auto}
+    .app{position:static;min-height:100vh;grid-template-columns:1fr;grid-template-rows:auto 56vw 300px 220px 220px 260px;
+      grid-template-areas:"top" "video" "map" "targets" "timeline" "events"}
+    .top{flex-wrap:wrap;padding:8px 12px;gap:8px}
+    .alertbar{order:5;flex-basis:100%}
+    .chips{display:none}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div id="screamer">
-  <img class="siren" src="/static/siren.gif" alt="">
-  <span class="ph" id="screamerText">ALERT</span>
-  <img class="siren flip" src="/static/siren.gif" alt="">
-</div>
-<audio id="alertAudio" preload="auto" crossorigin="anonymous"></audio>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="mark">J</span><b>JEVCAM</b><span class="site" id="siteLabel">pi-07 · CAM 01</span></div>
+    <div class="alertbar" id="alertbar">
+      <img class="siren" src="/static/siren.gif" alt="">
+      <span class="txt" id="abText">ARMED</span>
+      <img class="siren flip" src="/static/siren.gif" alt="">
+    </div>
+    <div class="chips">
+      <span class="chip" id="chCam"><i></i>CAM <b id="chCamV">–</b></span>
+      <span class="chip">VIDEO <b id="chFps">–</b></span>
+      <span class="chip pj" title="Blinks on each Jev response"><i class="led jev" id="ledJev"></i>JEV <b id="chJev">–</b></span>
+      <span class="chip pf" title="Blinks on each frame sampled for Jev"><i class="led frm" id="ledFrame"></i>SAMPLE <b id="chRate">–</b></span>
+    </div>
+    <div class="clock" id="clock"></div>
+    <button class="tb" id="mute">MUTE</button>
+    <button class="tb" id="cfgBtn">CONFIGURE</button>
+    <button class="tb" id="fsBtn" title="Full screen (F)">FULL SCREEN</button>
+  </header>
 
-<header>
-  <span class="dot" id="statusdot"></span>
-  <h1>JevCam &middot; live object detection</h1>
-  <div class="meta" id="meta">connecting&hellip;</div>
-</header>
-
-<div class="wrap">
-  <div class="card">
+  <section class="panel video" id="pvideo">
+    <div class="ph"><span>Live feed · CAM 01</span><span class="meta" id="vidMeta">–</span></div>
     <div class="feed" id="feed">
-      <img id="frame" src="/stream.mjpg" alt="camera feed">
+      <img id="frame" src="/stream.mjpg" alt="Live camera">
       <div class="boxes" id="boxes"></div>
-      <span class="live"><i></i>LIVE</span>
-      <div class="leds">
-        <span class="pj" title="Blinks on each Jev response"><i class="led jev" id="ledJev"></i>JEV</span>
-        <span class="pf" title="Blinks on each frame sampled for Jev"><i class="led frm" id="ledFrame"></i>FRAME</span>
-      </div>
-      <span class="badge" id="fbadge">&nbsp;</span>
-      <div class="offline">
-        <div class="spin"></div>
-        <div class="big">Camera offline</div>
-        <div class="sub" id="offsub">Reconnecting to the sensor&hellip; check the ribbon cable is fully seated.</div>
-      </div>
+      <div class="corners"></div>
+      <div class="vtag tl"><i></i>LIVE · NoIR</div>
+      <div class="vtag bl" id="vtagBL"></div>
+      <div class="vtag br" id="vtagBR"></div>
+      <div class="offline"><div class="spin"></div>Camera offline<small>Reconnecting to the sensor&hellip; check the ribbon cable is fully seated.</small></div>
     </div>
-  </div>
+  </section>
 
-  <div>
-    <div class="card alarm" id="alarm">
-      <div class="body">
-        <span class="icon" id="alarmIcon">🔔</span>
-        <div class="txt">
-          <div class="state" id="alarmState">armed</div>
-          <div class="phrase" id="alarmPhrase">&nbsp;</div>
-        </div>
-        <button class="mute" id="mute">Mute</button>
-      </div>
-    </div>
+  <section class="panel map">
+    <div class="ph"><span>Location</span><span class="meta" id="locSrc">locating&hellip;</span></div>
+    <div class="mapwrap"><div id="map"></div><div class="mapread" id="mapRead">locating&hellip;</div></div>
+  </section>
 
-    <div class="card">
-      <div class="sect">
-        <h2>Alarm</h2>
-        <div class="alertcfg">
-          <div>
-            <label class="lbl" for="alertTarget">Sound the alarm when it sees</label>
-            <textarea id="alertTarget" style="min-height:52px" spellcheck="false" placeholder="a person wearing a New York (NY) shirt"></textarea>
-          </div>
-          <div>
-            <label class="lbl" for="alertPhrase">Say this out loud</label>
-            <input id="alertPhrase" type="text" placeholder="New Yorker Alert"
-              style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;background:#fbfcfd">
-          </div>
-          <div class="row" style="margin-top:4px">
-            <label class="lbl" style="margin:0;display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" id="alertEnabled" checked> Alarm enabled
-            </label>
-            <button id="applyAlert" style="margin-left:auto">Save alarm</button>
-          </div>
-          <div class="hint">Re-announces every 10&nbsp;s while the object stays on screen.</div>
-        </div>
-      </div>
-      <div class="sect">
-        <h2>What should it look for?</h2>
-        <label class="lbl" for="targets">One object per line, in plain English (max 8)</label>
-        <textarea id="targets" spellcheck="false" placeholder="person&#10;cell phone&#10;hard hat&#10;unattended bag"></textarea>
-        <div class="hint">e.g. &ldquo;a person wearing a mask&rdquo;, &ldquo;a delivery package&rdquo;, &ldquo;a dog&rdquo;.</div>
-        <div class="row">
-          <label class="lbl" style="margin:0">Analyze every</label>
-          <input type="number" id="interval" min="0.5" max="60" step="0.5" value="1">
-          <label class="lbl" style="margin:0">sec</label>
-          <button id="apply" style="margin-left:auto">Apply</button>
-          <button id="pause" class="ghost">Pause</button>
-        </div>
-        <div id="err"></div>
-      </div>
-      <div class="sect">
-        <h2>Detections</h2>
-        <div id="dets"><div class="hint">waiting for first frame&hellip;</div></div>
-      </div>
+  <section class="panel timeline">
+    <div class="ph"><span>Presence · last 2 min</span><span class="meta">dashed line = 50% detect threshold</span></div>
+    <div class="spark" id="spark"><div class="empty">waiting for Jev&hellip;</div></div>
+  </section>
+
+  <section class="panel events">
+    <div class="ph"><span>Event log</span><span class="meta" id="evMeta"></span></div>
+    <div class="evlist" id="events"><div class="empty">no events yet</div></div>
+  </section>
+
+  <section class="panel targets">
+    <div class="ph"><span>Targets</span><button class="phbtn" id="cfgBtn2">EDIT</button></div>
+    <div class="tbl" id="targets"></div>
+    <div class="kpis">
+      <div class="kpi"><span>Uptime</span><b id="kUp">–</b></div>
+      <div class="kpi"><span>Jev calls</span><b id="kJev">–</b></div>
+      <div class="kpi"><span>Detections</span><b id="kDet">–</b></div>
+      <div class="kpi red"><span>Alarms</span><b id="kAl">–</b></div>
     </div>
-    <div class="foot">Powered by TypeSafe Jev &middot; Raspberry Pi + IR camera</div>
-  </div>
+  </section>
 </div>
 
-<script>
-let paused = false;
-let muted = false;
-try{ muted = localStorage.getItem("jevcam_muted")==="1"; }catch(e){}
-let lastSpoke = 0;          // epoch ms of last announcement
-const SPEAK_EVERY = 10000;  // 10 seconds
-const $ = s => document.querySelector(s);
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" aria-label="Configure">
+  <div class="ph"><span>Configure</span><button class="phbtn" id="cfgClose">CLOSE</button></div>
+  <div class="body">
+    <div class="sect">What should it look for?</div>
+    <div class="fld">
+      <label for="targetsIn">Targets &middot; one per line, plain English (max 8)</label>
+      <textarea id="targetsIn" spellcheck="false" placeholder="person&#10;cell phone&#10;hard hat"></textarea>
+      <div class="hint">e.g. &ldquo;a person wearing a mask&rdquo;, &ldquo;a delivery package&rdquo;, &ldquo;a dog&rdquo;.</div>
+    </div>
+    <div class="fld">
+      <label for="interval">Analyze every (seconds)</label>
+      <div class="row"><input type="number" id="interval" min="0.5" max="60" step="0.5" value="1" style="width:90px">
+        <button class="btn" id="apply" style="margin-left:auto">APPLY</button><button class="btn ghost" id="pause">PAUSE</button></div>
+    </div>
+    <div class="sect" style="margin-top:22px">Alarm</div>
+    <div class="fld">
+      <label for="alertTarget">Sound the alarm when it sees</label>
+      <textarea id="alertTarget" style="min-height:60px" spellcheck="false" placeholder="a person wearing a New York (NY) shirt"></textarea>
+    </div>
+    <div class="fld">
+      <label for="alertPhrase">Say this out loud</label>
+      <input id="alertPhrase" type="text" placeholder="New Yorker Alert">
+    </div>
+    <div class="row">
+      <label style="display:flex;align-items:center;gap:8px;font:500 12.5px var(--sans);cursor:pointer"><input type="checkbox" id="alertEnabled" checked> Alarm enabled</label>
+      <button class="btn" id="applyAlert" style="margin-left:auto">SAVE ALARM</button>
+    </div>
+    <div class="hint">The radio voice repeats every 10&nbsp;s while the object stays in view. Mute is in the top bar.</div>
+    <div id="err"></div>
+  </div>
+</aside>
 
-async function pushConfig(extra={}){
-  const targets = $("#targets").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,8);
-  const interval = parseFloat($("#interval").value)||1;
+<audio id="alertAudio" preload="auto"></audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rgb = c => `rgb(${(c || [45,114,210]).join(",")})`;
+const pad = n => String(n).padStart(2, "0");
+const hms = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const ago = t => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 2 ? "now" : s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`; };
+
+let S = null, T = null, paused = false, muted = false;
+try{ muted = localStorage.getItem("jevcam_muted") === "1"; }catch(e){}
+
+// ---------------------------------------------------------------- configure drawer
+async function pushConfig(extra = {}){
   const body = Object.assign({
-    targets, interval,
+    targets: $("#targetsIn").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 8),
+    interval: parseFloat($("#interval").value) || 1,
     alert_target: $("#alertTarget").value.trim(),
     alert_phrase: $("#alertPhrase").value.trim(),
     alert_enabled: $("#alertEnabled").checked,
   }, extra);
-  const r = await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const r = await fetch("/api/config", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
   return r.json();
 }
-$("#apply").onclick = ()=>pushConfig();
-$("#applyAlert").onclick = ()=>{ lastSpoke = 0; pushConfig(); };
-$("#pause").onclick = async ()=>{
-  paused = !paused;
-  await pushConfig({running: !paused});
-  $("#pause").textContent = paused ? "Resume" : "Pause";
-};
+function fillForm(cfg){
+  $("#targetsIn").value = (cfg.targets || []).join("\n");
+  $("#interval").value = cfg.interval || 1;
+  $("#alertTarget").value = cfg.alert_target || "";
+  $("#alertPhrase").value = cfg.alert_phrase || "";
+  $("#alertEnabled").checked = cfg.alert_enabled !== false;
+}
+const openCfg = v => { document.body.classList.toggle("cfg", v); if(v && S) fillForm(S.config || {}); };
+$("#cfgBtn").onclick = () => openCfg(true);
+$("#cfgBtn2").onclick = () => openCfg(true);
+$("#cfgClose").onclick = () => openCfg(false);
+$("#scrim").onclick = () => openCfg(false);
+$("#apply").onclick = async () => { await pushConfig(); openCfg(false); };
+$("#applyAlert").onclick = async () => { lastSpoke = 0; await pushConfig(); openCfg(false); };
+$("#pause").onclick = async () => { paused = !paused; await pushConfig({running: !paused}); $("#pause").textContent = paused ? "RESUME" : "PAUSE"; };
 
+// ---------------------------------------------------------------- full screen
+function toggleFs(){
+  if(document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+$("#fsBtn").onclick = toggleFs;
+document.addEventListener("fullscreenchange", () => { $("#fsBtn").textContent = document.fullscreenElement ? "EXIT FULL SCREEN" : "FULL SCREEN"; });
+document.addEventListener("keydown", e => {
+  if(e.target.matches("input,textarea")) return;
+  if(e.key === "Escape") openCfg(false);
+  else if(e.key === "f" || e.key === "F") toggleFs();
+});
+
+// ---------------------------------------------------------------- alarm voice (ElevenLabs radio DJ + radio filter)
+const SPEAK_EVERY = 10000;
+let lastSpoke = 0, actx = null, audioReady = false, loadedPhrase = null;
+const audioEl = $("#alertAudio");
 function setMute(v){
   muted = v;
-  try{ localStorage.setItem("jevcam_muted", v?"1":"0"); }catch(e){}
-  const b = $("#mute");
-  b.textContent = v ? "Unmute" : "Mute";
-  b.classList.toggle("on", v);
-  if(v){
-    if(window.speechSynthesis) window.speechSynthesis.cancel();
-    try{ $("#alertAudio").pause(); }catch(e){}
-  }
+  try{ localStorage.setItem("jevcam_muted", v ? "1" : "0"); }catch(e){}
+  $("#mute").textContent = v ? "UNMUTE" : "MUTE";
+  $("#mute").classList.toggle("on", v);
+  if(v){ try{ audioEl.pause(); }catch(e){} if(window.speechSynthesis) speechSynthesis.cancel(); }
 }
-$("#mute").onclick = ()=>setMute(!muted);
+$("#mute").onclick = () => setMute(!muted);
 setMute(muted);
-
-// --- Radio-announcer audio engine (ElevenLabs voice + Web Audio radio filter) ---
-const audioEl = $("#alertAudio");
-let actx=null, srcNode=null, audioReady=false, loadedPhrase=null;
-function initAudioGraph(){
+function initAudio(){
   if(audioReady) return;
   try{
-    actx = new (window.AudioContext||window.webkitAudioContext)();
-    srcNode = actx.createMediaElementSource(audioEl);
-    // radio/comms voice: band-limit + gentle distortion + compression + boost
-    const hp=actx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=380;
-    const lp=actx.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=3200;
-    const peak=actx.createBiquadFilter(); peak.type="peaking"; peak.frequency.value=1800; peak.Q.value=1.2; peak.gain.value=8;
-    const shaper=actx.createWaveShaper();
-    const n=256,c=new Float32Array(n); const amt=12;
-    for(let i=0;i<n;i++){const x=i*2/n-1; c[i]=(1+amt)*x/(1+amt*Math.abs(x));}
-    shaper.curve=c; shaper.oversample="4x";
-    const comp=actx.createDynamicsCompressor();
-    comp.threshold.value=-24; comp.ratio.value=12; comp.attack.value=.003; comp.release.value=.2;
-    const gain=actx.createGain(); gain.value=2.2;  // loud
-    srcNode.connect(hp); hp.connect(lp); lp.connect(peak); peak.connect(shaper);
-    shaper.connect(comp); comp.connect(gain); gain.connect(actx.destination);
-    audioReady=true;
-  }catch(e){ audioReady=false; }
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = actx.createMediaElementSource(audioEl);
+    const hp = actx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 380;
+    const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
+    const pk = actx.createBiquadFilter(); pk.type = "peaking"; pk.frequency.value = 1800; pk.Q.value = 1.2; pk.gain.value = 8;
+    const sh = actx.createWaveShaper(); const n = 256, c = new Float32Array(n);
+    for(let i = 0; i < n; i++){ const x = i * 2 / n - 1; c[i] = 13 * x / (1 + 12 * Math.abs(x)); }
+    sh.curve = c; sh.oversample = "4x";
+    const comp = actx.createDynamicsCompressor(); comp.threshold.value = -24; comp.ratio.value = 12;
+    const g = actx.createGain(); g.gain.value = 2.2;
+    src.connect(hp); hp.connect(lp); lp.connect(pk); pk.connect(sh); sh.connect(comp); comp.connect(g); g.connect(actx.destination);
+    audioReady = true;
+  }catch(e){}
 }
-function resumeAudio(){ try{ if(actx && actx.state==="suspended") actx.resume(); }catch(e){} }
-// unlock audio on first user gesture (autoplay policy)
-["click","keydown","touchstart"].forEach(ev=>document.addEventListener(ev,()=>{initAudioGraph();resumeAudio();},{once:false,passive:true}));
-
-function loadAlertAudio(phrase){
-  if(!phrase || phrase===loadedPhrase) return;
-  loadedPhrase = phrase;
-  audioEl.src = "/api/alert_audio?phrase=" + encodeURIComponent(phrase) + "&v=" + Date.now();
-  try{ audioEl.load(); }catch(e){}
-}
+["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, () => { initAudio(); if(actx && actx.state === "suspended") actx.resume(); }, {passive: true}));
+function loadAlertAudio(p){ if(!p || p === loadedPhrase) return; loadedPhrase = p; audioEl.src = "/api/alert_audio?phrase=" + encodeURIComponent(p); }
 function speak(text){
   if(muted) return;
-  initAudioGraph(); resumeAudio();
-  try{ audioEl.currentTime=0; }catch(e){}
-  // prefer the ElevenLabs radio voice; fall back to browser TTS if it fails
+  initAudio(); if(actx && actx.state === "suspended") actx.resume();
+  try{ audioEl.currentTime = 0; }catch(e){}
   const p = audioEl.play();
-  if(p && p.catch) p.catch(()=>{
-    if(window.speechSynthesis){
-      const u=new SpeechSynthesisUtterance(text); u.volume=1; u.rate=1.05;
-      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
-    }
-  });
+  if(p && p.catch) p.catch(() => { if(window.speechSynthesis){ const u = new SpeechSynthesisUtterance(text); speechSynthesis.cancel(); speechSynthesis.speak(u); } });
 }
 
-let focusGuard = {};
-["targets","alertTarget","alertPhrase","interval"].forEach(id=>{
-  const el = $("#"+id);
-  el.addEventListener("focus",()=>focusGuard[id]=true);
-  el.addEventListener("blur",()=>focusGuard[id]=false);
-});
-function hydrate(id,val){ const el=$("#"+id);
-  if(!focusGuard[id] && document.activeElement!==el && el.value.trim()==="" && val) el.value=val; }
+// ---------------------------------------------------------------- map (real-time location)
+const map = L.map("map", {zoomControl: false}).setView([25.77, -80.19], 4);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"}).addTo(map);
+L.control.zoom({position: "bottomright"}).addTo(map);
+const pinIcon = L.divIcon({className: "", html: '<div class="pin" id="pin"><i></i></div>', iconSize: [16, 16], iconAnchor: [8, 8]});
+let pin = null, accCircle = null, locSource = null, locCity = "";
+new ResizeObserver(() => map.invalidateSize()).observe($("#map"));
 
-// live MJPEG stream: reconnect if it drops (server restart, network blip)
+function setLoc(lat, lon, acc, source){
+  const ll = [lat, lon], first = !pin;
+  locSource = source;
+  if(first){
+    pin = L.marker(ll, {icon: pinIcon}).addTo(map);
+    accCircle = L.circle(ll, {radius: acc, color: "#2d72d2", weight: 1, fillOpacity: .07}).addTo(map);
+    map.setView(ll, acc > 2000 ? 12 : 17);
+  }else{ pin.setLatLng(ll); accCircle.setLatLng(ll).setRadius(acc); }
+  $("#locSrc").textContent = source === "browser" ? "browser location · live" : "approximate · from IP address";
+  $("#mapRead").innerHTML = `<b>${lat.toFixed(5)}, ${lon.toFixed(5)}</b><br>&plusmn; ${acc >= 1000 ? (acc / 1000).toFixed(1) + " km" : Math.round(acc) + " m"}`
+    + (locCity ? ` &middot; ${esc(locCity)}` : "") + `<br>updated ${hms(Date.now())}`;
+  if(locCity) $("#siteLabel").textContent = `pi-07 · CAM 01 · ${locCity}`;
+}
+async function ipLocate(){
+  for(const [url, pick] of [
+    ["https://ipwho.is/", d => d.success && [d.latitude, d.longitude, [d.city, d.region_code || d.region].filter(Boolean).join(", ")]],
+    ["https://get.geojs.io/v1/ip/geo.json", d => d.latitude && [+d.latitude, +d.longitude, [d.city, d.region].filter(Boolean).join(", ")]],
+  ]){
+    try{
+      const v = pick(await (await fetch(url, {cache: "no-store"})).json());
+      if(v){ locCity = v[2]; if(locSource !== "browser") setLoc(v[0], v[1], 5000, "ip"); return; }
+    }catch(e){}
+  }
+  if(!pin) $("#locSrc").textContent = "location unavailable";
+}
+function locate(){
+  ipLocate();   // city name for the label, and a fallback position
+  if(window.isSecureContext && navigator.geolocation){
+    navigator.geolocation.watchPosition(
+      p => setLoc(p.coords.latitude, p.coords.longitude, p.coords.accuracy || 50, "browser"),
+      () => {}, {enableHighAccuracy: true, maximumAge: 15000, timeout: 15000});
+  }
+}
+locate();
+setInterval(() => { if(locSource !== "browser") ipLocate(); }, 10 * 60 * 1000);
+function pingMap(alert){
+  const el = document.getElementById("pin"); if(!el) return;
+  el.classList.toggle("alert", !!alert);
+  if(!alert){ el.classList.remove("ping"); void el.offsetWidth; el.classList.add("ping"); }
+}
+
+// ---------------------------------------------------------------- live state
+let lastJev = null, lastFrame = null;
+function blink(el){ [el, el.closest(".chip")].forEach(n => { if(!n) return; n.classList.remove("blink"); void n.offsetWidth; n.classList.add("blink"); }); }
 function reconnectStream(){ $("#frame").src = "/stream.mjpg?t=" + Date.now(); }
-$("#frame").addEventListener("error", ()=>setTimeout(reconnectStream, 2000));
+$("#frame").addEventListener("error", () => setTimeout(reconnectStream, 2000));
 
-// detection boxes drawn over the live video (coords are 0-1 fractions)
+// boxes over the video: the stream is shown with object-fit: cover
 function drawBoxes(dets, show){
-  $("#boxes").innerHTML = !show ? "" : dets.filter(d=>d.drawn && d.box).map(d=>{
-    const b = d.box, col = `rgb(${(d.color||[37,99,235]).join(",")})`;
-    return `<div class="bx" style="left:${b.left*100}%;top:${b.top*100}%;width:${(b.right-b.left)*100}%;height:${(b.bottom-b.top)*100}%;border-color:${col}">
-      <b style="background:${col}">${esc(d.label)} ${Math.round((d.box_conf||0)*100)}%</b></div>`;
+  const img = $("#frame"), f = $("#feed").getBoundingClientRect();
+  const iw = img.naturalWidth || 1280, ih = img.naturalHeight || 720, s = Math.max(f.width / iw, f.height / ih);
+  const dx = (f.width - iw * s) / 2, dy = (f.height - ih * s) / 2;
+  $("#boxes").innerHTML = !show ? "" : dets.filter(d => d.drawn && d.box).map(d => {
+    const b = d.box, x = dx + b.left * iw * s, y = dy + b.top * ih * s, w = (b.right - b.left) * iw * s, h = (b.bottom - b.top) * ih * s;
+    return `<div class="bx${y < 24 ? " inside" : ""}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-color:${rgb(d.color)}">
+      <b style="background:${rgb(d.color)}">${esc(d.label.toUpperCase())} ${Math.round((d.box_conf || 0) * 100)}%</b></div>`;
   }).join("");
 }
 
-// indicator lights
-let lastJev = null, lastFrame = null;
-function blink(el){
-  [el, el.parentElement].forEach(n=>{ n.classList.remove("blink"); void n.offsetWidth; n.classList.add("blink"); });
-}
-
-function updateAlarm(al){
+function updateAlarm(al, cfg){
   al = al || {};
-  const card = $("#alarm"), icon = $("#alarmIcon"), screamer = $("#screamer");
-  const phrase = al.phrase || "Alert";
-  if(al.phrase) loadAlertAudio(al.phrase);      // prefetch radio voice
-  const active = !!(al.active && al.enabled);
-  card.classList.toggle("firing", active);
-  // full-width screamer banner
-  $("#screamerText").textContent = phrase;
-  screamer.classList.toggle("show", active);
-  // push the page below the banner so it never covers the header or feed
-  document.body.style.paddingTop = active ? (screamer.offsetHeight + "px") : "";
-  if(active){
-    $("#alarmState").textContent = "⚠ ALERT";
-    $("#alarmPhrase").textContent = phrase;
-    icon.textContent = muted ? "🔕" : "🚨";
-    // announce immediately on trigger, then every 10s while present
-    if(!muted && Date.now()-lastSpoke >= SPEAK_EVERY){
-      speak(phrase); lastSpoke = Date.now();
-    }
-  }else{
-    lastSpoke = 0;  // reset so the next detection speaks right away
-    if(al.enabled===false){ $("#alarmState").textContent="disarmed"; icon.textContent="🔕"; $("#alarmPhrase").textContent="—"; }
-    else{ $("#alarmState").textContent="armed"; icon.textContent="🔔";
-          $("#alarmPhrase").textContent = al.target ? ("watching: "+al.target) : "no alarm target set"; }
-  }
+  const bar = $("#alertbar"), active = !!(al.active && al.enabled);
+  const phrase = al.phrase || cfg.alert_phrase || "Alert";
+  if(phrase) loadAlertAudio(phrase);
+  bar.classList.toggle("firing", active);
+  bar.classList.toggle("off", al.enabled === false);
+  $("#pvideo").classList.toggle("firing", active);
+  $("#abText").textContent = active ? `⚠ ${phrase}` + (muted ? " · muted" : "")
+    : al.enabled === false ? "Alarm disarmed"
+    : `Armed · ${phrase} · watching for ${al.target || cfg.alert_target || "—"}`;
+  if(active){ if(!muted && Date.now() - lastSpoke >= SPEAK_EVERY){ speak(phrase); lastSpoke = Date.now(); } }
+  else lastSpoke = 0;
+  return active;
 }
 
 async function poll(){
   try{
-    const r = await fetch("/api/state"); const s = await r.json();
-    const cfg = s.config||{};
-    hydrate("targets",(cfg.targets||[]).join("\n"));
-    hydrate("alertTarget",cfg.alert_target||"");
-    hydrate("alertPhrase",cfg.alert_phrase||"");
-    if(document.activeElement!==$("#interval")) $("#interval").value = cfg.interval||1;
-    if(document.activeElement!==$("#alertEnabled")) $("#alertEnabled").checked = cfg.alert_enabled!==false;
-    updateAlarm(s.alert);
-    if(s.jev_count !== lastJev){ if(lastJev !== null) blink($("#ledJev")); lastJev = s.jev_count; }
-    if(s.frame_seq !== lastFrame){ if(lastFrame !== null) blink($("#ledFrame")); lastFrame = s.frame_seq; }
-    const camErr = s.camera_ok === false;
-    const wasOff = $("#feed").classList.contains("off");
-    $("#feed").classList.toggle("off", camErr);
-    if(wasOff && !camErr) reconnectStream();   // camera back: restart the video
-    $("#statusdot").style.background = camErr ? "var(--no)" : (cfg.running ? "var(--ok)" : "var(--no)");
-    $("#meta").innerHTML = (camErr?"camera offline":(cfg.running?"running":"paused"))
-      + " &middot; video " + (s.stream_fps!=null? s.stream_fps+" fps":"&mdash;")
-      + " &middot; Jev every " + (cfg.interval||1) + "s"
-      + " &middot; " + (s.latency_ms!=null? s.latency_ms+" ms":"&mdash;")
-      + (s.ts? " &middot; "+s.ts.split(" ")[1]:"");
-    const dets = s.detections||[];
-    drawBoxes(dets, !camErr && cfg.running);
-    $("#fbadge").textContent = camErr ? "" :
-      (dets.filter(d=>d.present).map(d=>d.label).join(" · ") || "no targets found");
-    const box = $("#dets");
-    if(!dets.length){ box.innerHTML='<div class="hint">no targets set &mdash; add some above.</div>'; }
-    else{
-      box.innerHTML = dets.map(d=>{
-        const pct = d.presence!=null? Math.round(d.presence*100):0;
-        const col = `rgb(${(d.color||[37,99,235]).join(",")})`;
-        return `<div class="det">
-          <span class="swatch" style="background:${col}"></span>
-          <span class="name">${esc(d.label)}</span>
-          <span class="bar"><span style="width:${pct}%;background:${col}"></span></span>
-          <span class="pct">${pct}%</span>
-          <span class="tag ${d.present?'yes':'no'}">${d.present?'YES':'no'}</span>
-        </div>`;
-      }).join("");
-    }
-    $("#err").innerHTML = (s.error && !camErr)? `<div class="err">${esc(s.error)}</div>`:"";
-  }catch(e){ $("#meta").textContent="offline"; $("#statusdot").style.background="var(--no)"; }
+    S = await (await fetch("/api/state", {cache: "no-store"})).json();
+  }catch(e){ $("#chCamV").textContent = "NO LINK"; $("#chCam").classList.add("bad"); return; }
+  const cfg = S.config || {}, camOff = S.camera_ok === false;
+  const active = updateAlarm(S.alert, cfg);
+  if(S.jev_count !== lastJev){ if(lastJev !== null){ blink($("#ledJev")); pingMap(active); } lastJev = S.jev_count; }
+  if(S.frame_seq !== lastFrame){ if(lastFrame !== null) blink($("#ledFrame")); lastFrame = S.frame_seq; }
+  const wasOff = $("#feed").classList.contains("off");
+  $("#feed").classList.toggle("off", camOff);
+  if(wasOff && !camOff) reconnectStream();
+  $("#chCam").classList.toggle("bad", camOff);
+  $("#chCamV").textContent = camOff ? "OFFLINE" : (cfg.running === false ? "PAUSED" : "LIVE");
+  $("#chFps").textContent = S.stream_fps != null ? `${S.stream_fps} fps` : "–";
+  $("#chJev").textContent = S.latency_ms != null ? `${S.latency_ms} ms` : "–";
+  $("#chRate").textContent = `${cfg.interval || 1}s`;
+  const img = $("#frame");
+  $("#vidMeta").textContent = `${img.naturalWidth || 1280}×${img.naturalHeight || 720} · ${S.stream_fps || "–"} fps · Jev every ${cfg.interval || 1}s`;
+  const dets = S.detections || [];
+  drawBoxes(dets, !camOff && cfg.running !== false);
+  $("#vtagBL").textContent = camOff ? "" : (dets.filter(d => d.present).map(d => d.label.toUpperCase()).join(" · ") || "NO TARGETS IN VIEW");
+  $("#vtagBR").textContent = S.ts ? `JEV ${S.ts.split(" ")[1]}` : "";
+  $("#err").innerHTML = S.error && !camOff ? `<div class="err">${esc(S.error)}</div>` : "";
+  renderTargets(dets, S.alert || {}, cfg);
 }
-function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-setInterval(poll, 500);
-poll();
+// ---------------------------------------------------------------- timeline, events, targets
+const WINDOW_MS = 120000;
+function lastSeen(label){
+  if(!T) return null;
+  for(let i = T.samples.length - 1; i >= 0; i--){ const v = T.samples[i].p[label]; if(v != null && v >= .5) return T.samples[i].t; }
+  return null;
+}
+function sparkPath(points, w, h){
+  if(!points.length) return {line: "", area: ""};
+  const now = Date.now(), xs = p => ((p.t - (now - WINDOW_MS)) / WINDOW_MS) * w, ys = v => h - 2 - v * (h - 4);
+  const line = points.map((p, i) => `${i ? "L" : "M"}${xs(p).toFixed(1)},${ys(p.v).toFixed(1)}`).join(" ");
+  const area = `${line} L${xs(points[points.length - 1]).toFixed(1)},${h} L${xs(points[0]).toFixed(1)},${h} Z`;
+  return {line, area};
+}
+function renderSpark(){
+  if(!T || !S) return;
+  const cfg = S.config || {}, dets = S.detections || [], now = Date.now();
+  const rows = (cfg.targets || []).map((label, i) => ({label, color: (dets.find(d => d.label === label) || {}).color, key: s => s.p[label]}));
+  if(cfg.alert_target) rows.unshift({label: `alarm · ${cfg.alert_phrase || "alert"}`, color: [205, 66, 70], key: s => s.a, alarm: true});
+  if(!rows.length){ $("#spark").innerHTML = '<div class="empty">no targets set</div>'; return; }
+  const recent = T.samples.filter(s => s.t >= now - WINDOW_MS);
+  $("#spark").innerHTML = rows.map(r => {
+    const pts = recent.map(s => ({t: s.t, v: r.key(s)})).filter(p => p.v != null);
+    const {line, area} = sparkPath(pts, 300, 26), col = rgb(r.color), cur = pts.length ? pts[pts.length - 1].v : null;
+    return `<div class="srow"><span class="n"><i style="background:${col}"></i>${esc(r.label)}</span>
+      <svg viewBox="0 0 300 26" preserveAspectRatio="none"><line x1="0" y1="13" x2="300" y2="13" stroke="#c5ccd5" stroke-dasharray="3 3" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        <path d="${area}" fill="${col}" opacity=".12"/><path d="${line}" fill="none" stroke="${col}" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+      <span class="v" style="color:${cur != null && cur >= .5 ? col : "var(--faint)"}">${cur != null ? Math.round(cur * 100) + "%" : "–"}</span></div>`;
+  }).join("");
+}
+const KIND = {detected: "DETECTED", cleared: "CLEARED", alarm: "ALARM", alarm_end: "ALARM END", camera_off: "CAM OFFLINE", camera_on: "CAM ONLINE", error: "ERROR"};
+function renderEvents(){
+  if(!T) return;
+  const ev = T.events.slice().reverse();
+  $("#evMeta").textContent = `${T.events.length} events · since ${hms(T.started)}`;
+  $("#events").innerHTML = ev.length ? ev.map(e => `<div class="ev"><span class="t">${hms(e.t)}</span><span class="tag ${e.kind}">${KIND[e.kind] || e.kind}</span>
+    <span class="l">${esc(e.label)}</span><span class="p">${e.value != null ? Math.round(e.value * 100) + "%" : ""}</span></div>`).join("")
+    : '<div class="empty">no events yet</div>';
+}
+function renderTargets(dets, al, cfg){
+  const hits = (T && T.hits) || {};
+  const row = (name, col, p, status, cls, hit, seen, extra = "") => `<div class="tr ${extra}"><span class="nm"><i style="background:${col}"></i>${name}</span>
+    <span class="bar"><span style="width:${Math.round((p || 0) * 100)}%;background:${col}"></span><em></em></span>
+    <span class="st ${cls}">${status}</span><span class="r">${hit}</span><span class="r">${seen}</span></div>`;
+  let html = `<div class="tr h"><span>Target</span><span>Presence</span><span>Status</span><span class="r">Hits</span><span class="r">Seen</span></div>`;
+  if(cfg.alert_target){
+    const p = al.presence, on = !!(al.active && al.enabled);
+    html += row(`🚨 ${esc(cfg.alert_target)}`, "rgb(205,66,70)", p, on ? "ALARM" : al.enabled === false ? "OFF" : p != null ? `${Math.round(p * 100)}%` : "–", on ? "alarm" : "no", "", "", "alarmrow");
+  }
+  for(const d of dets){
+    const seen = lastSeen(d.label);
+    html += row(esc(d.label), rgb(d.color), d.presence, d.present ? `YES ${Math.round(d.presence * 100)}%` : `${Math.round((d.presence || 0) * 100)}%`,
+      d.present ? "yes" : "no", hits[d.label] || 0, d.present ? "now" : seen ? ago(seen) : "–");
+  }
+  if(!dets.length && !cfg.alert_target) html += '<div class="empty">no targets set &mdash; press EDIT</div>';
+  $("#targets").innerHTML = html;
+}
+function renderKpis(){
+  if(!T) return;
+  const up = Math.max(0, Math.floor((Date.now() - T.started) / 1000));
+  $("#kUp").textContent = up < 3600 ? `${Math.floor(up / 60)}m ${pad(up % 60)}s` : `${Math.floor(up / 3600)}h ${pad(Math.floor(up / 60) % 60)}m`;
+  $("#kJev").textContent = S ? (S.jev_count || 0).toLocaleString() : "–";
+  $("#kDet").textContent = Object.values(T.hits || {}).reduce((a, b) => a + b, 0).toLocaleString();
+  $("#kAl").textContent = (T.alarms || 0).toLocaleString();
+}
+async function pollTimeline(){
+  try{ T = await (await fetch("/api/timeline", {cache: "no-store"})).json(); }catch(e){ return; }
+  renderSpark(); renderEvents(); renderKpis();
+}
+
+function tick(){ const d = new Date(); $("#clock").textContent = `${hms(d)}`; }
+new ResizeObserver(() => S && drawBoxes(S.detections || [], S.camera_ok !== false && (S.config || {}).running !== false)).observe($("#feed"));
+
+tick(); setInterval(tick, 1000);
+poll(); setInterval(poll, 500);
+pollTimeline(); setInterval(pollTimeline, 2000);
 </script>
 </body>
 </html>
