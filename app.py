@@ -55,6 +55,8 @@ state = {
     "latency_ms": None,
     "error": None,
     "frames": 0,
+    "jev_count": 0,        # successful Jev responses (drives the JEV light)
+    "frame_seq": 0,        # new annotated frames stored (drives the FRAME light)
     "alert": {"active": False, "presence": None, "phrase": "", "target": "", "enabled": True},
 }
 STATE_LOCK = threading.Lock()
@@ -285,6 +287,8 @@ def loop():
             continue
         t0 = time.time()
         err = None
+        jev_ok = False
+        frame_new = False
         detections = []
         alert = {"active": False, "presence": None, "phrase": alert_phrase,
                  "target": alert_target, "enabled": alert_enabled}
@@ -294,6 +298,7 @@ def loop():
             img.save(buf, format="JPEG", quality=88)
             img_b64 = base64.b64encode(buf.getvalue()).decode()
             resp = call_jev(img_b64, targets, alert_target or None)
+            jev_ok = True
             detections = parse_answers(resp, targets)
             if alert_target:
                 ap = resp.get("answers", {}).get("alert_present", {}).get("noul")
@@ -309,6 +314,7 @@ def loop():
             jpeg = annotate(img_for_draw, detections, ts_str)
             with JPEG_LOCK:
                 latest_jpeg["bytes"] = jpeg
+            frame_new = True
         except Exception as e:  # noqa: BLE001
             err = err or str(e)
         with STATE_LOCK:
@@ -316,6 +322,8 @@ def loop():
                 "ts": ts_str, "detections": detections,
                 "latency_ms": latency, "error": err,
                 "frames": state["frames"] + 1, "alert": alert,
+                "jev_count": state["jev_count"] + (1 if jev_ok else 0),
+                "frame_seq": state["frame_seq"] + (1 if frame_new else 0),
             })
         dt = time.time() - t0
         time.sleep(max(0.1, interval - dt))
@@ -329,6 +337,8 @@ def _store_plain(targets):
         jpeg = annotate(img, [], ts_str)
         with JPEG_LOCK:
             latest_jpeg["bytes"] = jpeg
+        with STATE_LOCK:
+            state["frame_seq"] += 1
     except Exception:  # noqa: BLE001
         pass
 

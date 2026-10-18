@@ -38,6 +38,14 @@
   .feed .live i{width:8px;height:8px;border-radius:50%;background:#ff3b30;display:inline-block;
     animation:pulse 1.4s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+  .feed .leds{position:absolute;top:10px;right:10px;display:flex;gap:8px}
+  .feed .leds span{display:flex;align-items:center;gap:7px;background:rgba(0,0,0,.55);color:#fff;
+    font-size:11px;font-weight:700;letter-spacing:.08em;padding:5px 10px;border-radius:20px;backdrop-filter:blur(4px)}
+  .led{width:10px;height:10px;border-radius:50%;background:#3a3f47;display:inline-block}
+  .led.jev.blink{animation:blinkjev .8s ease-out}
+  .led.frm.blink{animation:blinkfrm .8s ease-out}
+  @keyframes blinkjev{0%{background:#34d399;box-shadow:0 0 12px 4px #34d399}100%{background:#3a3f47;box-shadow:none}}
+  @keyframes blinkfrm{0%{background:#60a5fa;box-shadow:0 0 12px 4px #60a5fa}100%{background:#3a3f47;box-shadow:none}}
   .feed .offline{position:absolute;inset:0;display:none;flex-direction:column;gap:10px;
     align-items:center;justify-content:center;background:rgba(10,11,13,.82);color:#fff;text-align:center;padding:20px}
   .feed.off .offline{display:flex}
@@ -129,6 +137,10 @@
     <div class="feed" id="feed">
       <img id="frame" alt="camera feed">
       <span class="live"><i></i>LIVE</span>
+      <div class="leds">
+        <span title="Blinks on each Jev response"><i class="led jev" id="ledJev"></i>JEV</span>
+        <span title="Blinks on each new frame"><i class="led frm" id="ledFrame"></i>FRAME</span>
+      </div>
       <span class="badge" id="fbadge">&nbsp;</span>
       <div class="offline">
         <div class="spin"></div>
@@ -297,6 +309,10 @@ function hydrate(id,val){ const el=$("#"+id);
 function refreshImg(){
   $("#frame").src = "/latest.jpg?t=" + Date.now();
 }
+// indicator lights
+let lastJev = null, lastFrame = null;
+function blink(el){ el.classList.remove("blink"); void el.offsetWidth; el.classList.add("blink"); }
+$("#frame").addEventListener("load", ()=>blink($("#ledFrame")));
 
 function updateAlarm(al){
   al = al || {};
@@ -336,6 +352,8 @@ async function poll(){
     if(document.activeElement!==$("#interval")) $("#interval").value = cfg.interval||5;
     if(document.activeElement!==$("#alertEnabled")) $("#alertEnabled").checked = cfg.alert_enabled!==false;
     updateAlarm(s.alert);
+    if(s.jev_count !== lastJev){ if(lastJev !== null) blink($("#ledJev")); lastJev = s.jev_count; }
+    if(s.frame_seq !== lastFrame){ lastFrame = s.frame_seq; refreshImg(); }  // FRAME blinks on load
     const camErr = s.error && /camera|ribbon|sensor/i.test(s.error);
     $("#feed").classList.toggle("off", !!camErr);
     $("#statusdot").style.background = camErr ? "var(--no)" : (cfg.running ? "var(--ok)" : "var(--no)");
@@ -368,9 +386,8 @@ async function poll(){
 }
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
-setInterval(refreshImg, 1000);
-setInterval(poll, 1000);
-refreshImg(); poll();
+setInterval(poll, 500);
+poll();
 </script>
 </body>
 </html>
