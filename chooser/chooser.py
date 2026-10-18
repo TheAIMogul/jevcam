@@ -52,6 +52,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 return self._send(200, "text/html; charset=utf-8", f.read())
+        if path in ("/anatomy", "/anatomy.html"):              # how both apps work
+            with open(os.path.join(HERE, "anatomy.html"), "rb") as f:
+                return self._send(200, "text/html; charset=utf-8", f.read())
         if path.startswith("/assets/"):
             name = os.path.basename(path)                  # no sub-paths, no ..
             ctype = ASSET_TYPES.get(os.path.splitext(name)[1].lower())

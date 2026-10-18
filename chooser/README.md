@@ -8,7 +8,8 @@ own screen, where it starts full-screen at login).
 | `1` | JevCam: live object detection | 8000 |
 | `2` | PPE Monitor: site-entry safety compliance | 3001 |
 
-Arrow keys choose, `Enter` opens, `1` / `2` open directly. The chosen app runs
+Arrow keys choose, `Enter` opens, `1` / `2` open directly, and `A` (or the small
+**How it works** button) opens `anatomy.html`, which shows both apps side by side. The chosen app runs
 full-screen inside the chooser; the **Apps** button (bottom left) comes back.
 
 ## What starts at boot
