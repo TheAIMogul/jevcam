@@ -22,7 +22,8 @@
   header h1{font-size:18px;margin:0;font-weight:650;letter-spacing:-.01em}
   header .meta{margin-left:auto;font-size:13px;color:var(--muted);text-align:right}
   .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;
-    grid-template-columns:minmax(0,1fr) 360px;gap:20px}
+    grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
+  body{transition:padding-top .15s}
   @media(max-width:900px){.wrap{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:var(--shadow);overflow:hidden}
@@ -307,6 +308,8 @@ function updateAlarm(al){
   // full-width screamer banner
   $("#screamerText").textContent = phrase;
   screamer.classList.toggle("show", active);
+  // push the page below the banner so it never covers the header or feed
+  document.body.style.paddingTop = active ? (screamer.offsetHeight + "px") : "";
   if(active){
     $("#alarmState").textContent = "⚠ ALERT";
     $("#alarmPhrase").textContent = phrase;
