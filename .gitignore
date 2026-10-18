@@ -7,3 +7,5 @@ reports/
 assets/siren-src/*.json
 assets/siren-src/preview.png
 assets/siren-src/contact.jpg
+app2/data/
+app2/*.log

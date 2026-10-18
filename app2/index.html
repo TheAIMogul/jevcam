@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPE Monitor</title>
+<meta name="description" content="Site-entry PPE compliance: live NoIR camera with worker detection, instant verdicts, today's numbers and a live alert feed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --page: #0a0c10;
+    --surface: #12151b;
+    --surface-2: #181c24;
+    --border: rgba(255,255,255,0.08);
+    --border-2: rgba(255,255,255,0.16);
+    --text: #f2f3f5;
+    --text-2: #b8bcc6;
+    --muted: #7d8290;
+    --accent: #3987e5;
+    --good: #0ca30c;
+    --good-ui: #2fd36f;
+    --critical: #d03b3b;
+    --critical-ui: #ff5a5a;
+    --warning: #fab219;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --r: 16px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body { background: radial-gradient(1200px 600px at 70% -10%, #15203a 0%, var(--page) 55%); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  h1, h2 { margin: 0; }
+  h2 { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  /* ---------- frame ---------- */
+  .app { display: grid; grid-template-rows: 60px 1fr; height: 100vh; min-height: 720px; }
+  .top { display: flex; align-items: center; gap: 14px; padding: 0 22px; border-bottom: 1px solid var(--border); background: rgba(10,12,16,.6); backdrop-filter: blur(10px); }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
+  .brand .mark { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, #4f9cff, #2a6fd6); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 14px; box-shadow: 0 4px 14px rgba(57,135,229,.35); }
+  .brand .site { color: var(--text-2); font-weight: 500; margin-left: 4px; }
+  .grow { flex: 1; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: rgba(255,255,255,.03); color: var(--text-2); font-size: 13px; white-space: nowrap; }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good-ui); box-shadow: 0 0 0 3px rgba(47,211,111,.18); }
+  .chip .clock { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.03); display: grid; place-items: center; cursor: pointer; color: var(--text-2); }
+  .icon-btn:hover { background: rgba(255,255,255,.07); color: var(--text); }
+  .demo { display: flex; gap: 6px; align-items: center; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: rgba(255,255,255,.03); }
+  .demo span { font-size: 11px; color: var(--muted); padding: 0 8px; letter-spacing: .08em; text-transform: uppercase; }
+  .demo button { height: 28px; padding: 0 12px; border-radius: 999px; border: 0; cursor: pointer; font-weight: 600; font-size: 12px; background: rgba(255,255,255,.06); color: var(--text); }
+  .demo button:hover { background: rgba(255,255,255,.12); }
+  .demo button kbd { margin-left: 6px; font: 600 10px var(--mono); color: var(--muted); }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; padding: 18px 22px 22px; min-height: 0; }
+  .col { display: grid; gap: 18px; min-height: 0; grid-template-rows: auto auto minmax(150px, 1fr); }
+  .card { background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.015)); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; min-width: 0; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+
+  /* ---------- feed ---------- */
+  .feed-card { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; min-height: 0; }
+  .feed-head { display: flex; align-items: center; justify-content: space-between; }
+  .feed-head .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .feed-head .title { font-weight: 700; font-size: 15px; }
+  .feed { position: relative; border-radius: 12px; overflow: hidden; background: #05070a; border: 1px solid var(--border-2); height: 100%; min-height: 320px; transition: box-shadow .4s; }
+  .feed.alarm { box-shadow: 0 0 0 2px rgba(255,90,90,.9), 0 0 60px rgba(255,60,60,.35); animation: pulse 1s ease-in-out 4; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 2px rgba(255,90,90,.4), 0 0 24px rgba(255,60,60,.15); } }
+  .feed canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hud { position: absolute; left: 14px; top: 12px; display: flex; gap: 10px; align-items: center; font: 500 11px var(--mono); color: #d9e2ec; text-shadow: 0 1px 2px #000; letter-spacing: .04em; }
+  .hud .rec { width: 8px; height: 8px; border-radius: 50%; background: #ff4d4d; animation: blink 1.2s steps(2) infinite; }
+  @keyframes blink { to { opacity: .25; } }
+  .hud-r { position: absolute; right: 14px; top: 12px; font: 500 11px var(--mono); color: #9fb0c0; text-shadow: 0 1px 2px #000; }
+  .hud-b { position: absolute; right: 14px; bottom: 12px; font: 500 11px var(--mono); color: #d9e2ec; text-shadow: 0 1px 2px #000; }
+  .banner { position: absolute; left: 50%; top: 16px; transform: translate(-50%, -140%); display: flex; align-items: center; gap: 14px; padding: 12px 18px 12px 14px; border-radius: 14px; background: rgba(120,20,20,.75); border: 1px solid rgba(255,90,90,.7); backdrop-filter: blur(10px); box-shadow: 0 16px 40px rgba(0,0,0,.5); transition: transform .45s cubic-bezier(.2,.9,.2,1.1); white-space: nowrap; }
+  .banner.show { transform: translate(-50%, 0); }
+  .banner .ic { width: 36px; height: 36px; border-radius: 10px; background: var(--critical-ui); display: grid; place-items: center; font-weight: 900; font-size: 20px; color: #fff; }
+  .banner .t { font-weight: 800; font-size: 15px; letter-spacing: .02em; }
+  .banner .d { font-size: 12px; color: #ffd0d0; }
+  .banner .push { margin-left: 8px; font-size: 11px; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.12); color: #fff; }
+  .banner .push:empty { display: none; }
+
+  .verdict { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: rgba(255,255,255,.02); transition: background .3s, border-color .3s; }
+  .verdict.ok { border-color: rgba(47,211,111,.35); background: rgba(47,211,111,.06); }
+  .verdict.bad { border-color: rgba(255,90,90,.45); background: rgba(255,90,90,.07); }
+  .verdict.scan { border-color: rgba(250,178,25,.4); background: rgba(250,178,25,.05); }
+  .verdict .ic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font-size: 24px; font-weight: 900; color: #fff; background: rgba(255,255,255,.08); transition: background .3s; }
+  .verdict.ok .ic { background: var(--good); box-shadow: 0 6px 20px rgba(12,163,12,.35); }
+  .verdict.bad .ic { background: var(--critical); box-shadow: 0 6px 20px rgba(208,59,59,.4); }
+  .verdict.scan .ic { background: rgba(250,178,25,.2); color: var(--warning); }
+  .verdict .t { font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
+  .verdict .d { color: var(--text-2); font-size: 13px; }
+  .items { display: flex; gap: 8px; }
+  .item { display: flex; align-items: center; gap: 7px; padding: 7px 11px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--border); font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+  .item b { font-size: 13px; }
+  .item.ok { border-color: rgba(47,211,111,.35); color: var(--text); } .item.ok b { color: var(--good-ui); }
+  .item.bad { border-color: rgba(255,90,90,.5); color: var(--text); } .item.bad b { color: var(--critical-ui); }
+  .item.off { opacity: .45; }
+
+  /* ---------- right column ---------- */
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .tile { background: rgba(255,255,255,.025); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .tile .l { color: var(--text-2); font-size: 12.5px; font-weight: 500; }
+  .tile .v { font-size: 40px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-top: 4px; }
+  .tile .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tile .s.up { color: var(--good-ui); } .tile .s.down { color: var(--critical-ui); }
+  .tile.wide { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+  .spark { display: flex; align-items: flex-end; gap: 2px; height: 40px; width: 150px; }
+  .spark i { flex: 1; background: rgba(57,135,229,.45); border-radius: 2px 2px 0 0; min-height: 2px; }
+  .spark i.now { background: var(--accent); }
+  .ring { position: relative; width: 92px; height: 92px; justify-self: end; }
+  .ring svg { width: 92px; height: 92px; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 8; stroke-linecap: round; }
+  .ring .track { stroke: rgba(255,255,255,.08); }
+  .ring .bar { stroke: var(--good); transition: stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1), stroke .4s; }
+  .ring .num { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 20px; letter-spacing: -.03em; }
+  .tile.rate { display: grid; grid-template-columns: 1fr auto; align-items: center; }
+  .tile.rate .s { color: var(--text-2); line-height: 1.35; }
+
+  .shifts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .sh { display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.025); border: 1px solid var(--border); font-size: 12.5px; }
+  .sh .n { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .sh .n small { font-weight: 600; color: var(--good-ui); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; }
+  .sh .p { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sh .meter { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .sh .meter i { display: block; height: 100%; border-radius: 3px; background: var(--good); transition: width .6s ease; }
+  .sh .c { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; }
+
+  .feed-list { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+  .list { overflow: auto; min-height: 0; margin: 12px -6px 0; padding: 0 6px; display: grid; gap: 8px; align-content: start; scrollbar-width: thin; }
+  .row-e { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,.02); animation: in .4s cubic-bezier(.2,.8,.2,1); }
+  @keyframes in { from { opacity: 0; transform: translateY(-10px); } }
+  .row-e .ic { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; font-weight: 800; font-size: 18px; }
+  .row-e.ok .ic { background: rgba(47,211,111,.12); color: var(--good-ui); }
+  .row-e.bad { border-color: rgba(255,90,90,.35); background: rgba(255,90,90,.05); }
+  .row-e.bad .ic { background: rgba(255,90,90,.15); color: var(--critical-ui); }
+  .row-e img.ic { object-fit: cover; cursor: zoom-in; border: 1px solid rgba(255,90,90,.4); }
+  .row-e .w { font-weight: 700; }
+  .row-e .m { font-size: 12px; color: var(--text-2); margin-top: 1px; }
+  .row-e.bad .m { color: #ffb4b4; }
+  .row-e .t { font: 500 12px var(--mono); color: var(--muted); text-align: right; }
+  .row-e .pushed { display: block; font: 500 10px var(--sans); color: var(--muted); margin-top: 3px; letter-spacing: .04em; }
+
+  /* ---------- settings drawer ---------- */
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 40; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: #0f1218; border-left: 1px solid var(--border-2); transform: translateX(100%); transition: transform .3s cubic-bezier(.2,.8,.2,1); z-index: 41; padding: 22px; overflow: auto; display: grid; gap: 22px; align-content: start; }
+  body.settings .backdrop { opacity: 1; pointer-events: auto; }
+  body.settings .drawer { transform: none; }
+  .drawer h1 { font-size: 18px; font-weight: 700; }
+  .drawer .close { position: absolute; right: 16px; top: 16px; }
+  .group { display: grid; gap: 10px; }
+  .sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid var(--border); }
+  .sw .l { font-weight: 500; } .sw .l small { display: block; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .toggle { position: relative; width: 42px; height: 24px; border-radius: 999px; background: rgba(255,255,255,.15); border: 0; cursor: pointer; transition: background .2s; flex: none; }
+  .toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .toggle[aria-checked="true"] { background: var(--accent); }
+  .toggle[aria-checked="true"]::after { transform: translateX(18px); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid var(--border); }
+  .seg button { border: 0; background: transparent; border-radius: 9px; padding: 9px 6px; cursor: pointer; font-weight: 600; color: var(--text-2); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .help { font-size: 12px; color: var(--muted); }
+  .input { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--border-2); border-radius: 10px; padding: 10px 12px; }
+  .input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .input.num { width: 84px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+  .btn { border: 1px solid var(--border-2); background: rgba(255,255,255,.05); border-radius: 10px; padding: 9px 14px; font-weight: 600; cursor: pointer; }
+  .btn:hover { background: rgba(255,255,255,.1); }
+
+  /* ---------- watch list ---------- */
+  .watch .head { display: flex; align-items: center; gap: 10px; }
+  .watch .head .help { margin-left: auto; }
+  .btn.sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  .wl { display: grid; gap: 5px; margin-top: 10px; max-height: 236px; overflow: auto; scrollbar-width: thin; }
+  .wi { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 5px 9px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.02); }
+  .wi.off { opacity: .55; }
+  .wi .n { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+  .wi .st { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .wi .st.on { color: var(--good-ui); }
+  .tag { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; }
+  .tag.critical { background: rgba(255,90,90,.15); color: #ff8a8a; } .tag.warning { background: rgba(250,178,25,.15); color: var(--warning); }
+  .wi .act { display: flex; gap: 2px; }
+  .wi .act button { width: 26px; height: 26px; border-radius: 7px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .wi .act button:hover { background: rgba(255,255,255,.08); color: var(--text); }
+  .toggle.sm { width: 34px; height: 20px; } .toggle.sm::after { width: 14px; height: 14px; } .toggle.sm[aria-checked="true"]::after { transform: translateX(14px); }
+  .wform { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 45; width: min(480px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 20px; border-radius: 16px; border: 1px solid var(--border-2); background: #11151c; box-shadow: 0 30px 80px rgba(0,0,0,.65); animation: in .25s cubic-bezier(.2,.8,.2,1); }
+  .wform .ft { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+  body.wform .backdrop { opacity: 1; pointer-events: auto; }
+  .wform .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .wform .input { padding: 8px 10px; font-size: 13px; }
+  .wform .seg { grid-template-columns: repeat(2, 1fr); padding: 3px; } .wform .seg.three { grid-template-columns: repeat(3, 1fr); }
+  .wform .seg button { padding: 6px 4px; font-size: 12.5px; }
+  .wform .dates { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .wform .dchip { display: inline-flex; gap: 6px; align-items: center; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 12px; }
+  .wform .dchip button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 12px; }
+  .wform .foot { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+  input[type=date].input { color-scheme: dark; width: auto; }
+  .row-e.bad.warning { border-color: rgba(250,178,25,.35); background: rgba(250,178,25,.05); }
+  .row-e.bad.warning .ic { background: rgba(250,178,25,.15); color: var(--warning); border-color: rgba(250,178,25,.4); }
+  .row-e.bad.warning .m { color: #ffd98a; }
+
+  /* ---------- lightbox ---------- */
+  .lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.85); display: none; place-items: center; padding: 24px; }
+  .lightbox.open { display: grid; }
+  .lightbox img { max-width: min(1200px, 100%); max-height: 84vh; border-radius: 12px; border: 1px solid var(--border-2); box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+  .lightbox .cap { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); background: rgba(0,0,0,.7); padding: 8px 14px; border-radius: 10px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+
+  /* Compact mode for 720p/768p projectors: keep every card on screen. */
+  @media (max-height: 830px) and (min-width: 1181px) {
+    .app { grid-template-rows: 54px 1fr; }
+    .main { padding: 12px 16px 16px; gap: 12px; }
+    .col { gap: 12px; grid-template-rows: auto auto minmax(120px, 1fr); overflow-y: auto; scrollbar-width: thin; }
+    .card { padding: 14px; }
+    .feed-card { gap: 10px; }
+    .feed { min-height: 240px; }
+    .tile { padding: 10px 14px; }
+    .tile .v { font-size: 32px; }
+    .stats { gap: 10px; }
+    .shifts { margin-top: 10px; gap: 10px; }
+    .sh { padding: 8px 10px; }
+    .wl { max-height: 148px; }
+    .verdict { padding: 10px 14px; gap: 12px; }
+    .verdict .ic { width: 40px; height: 40px; font-size: 20px; }
+    .verdict .t { font-size: 17px; }
+    .row-e { padding: 8px 10px; }
+  }
+  /* The verdict row drops its item chips to a second line when the feed column is narrow. */
+  .verdict .t { white-space: nowrap; }
+  .items { flex-wrap: wrap; justify-content: flex-end; }
+  @media (max-width: 1360px) and (min-width: 1181px) {
+    .verdict { grid-template-columns: auto 1fr; }
+    .verdict .items { grid-column: 1 / -1; justify-content: flex-start; }
+  }
+  @media (max-width: 1180px) {
+    .app { height: auto; }
+    .main { grid-template-columns: 1fr; }
+    .col { grid-template-rows: none; }
+    .feed { height: auto; aspect-ratio: 16 / 9; }
+    .items { flex-wrap: wrap; }
+    .list { max-height: 420px; }
+  }
+  @media (max-width: 760px) {
+    .top { padding: 0 14px; gap: 8px; } .brand .site, .demo span, .chip.cam { display: none; }
+    .main { padding: 14px; }
+    .verdict { grid-template-columns: auto 1fr; } .verdict .items { grid-column: 1 / -1; }
+    .hud-r { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="mark">P</span> PPE Monitor <span class="site" id="siteName"></span></div>
+    <div class="grow"></div>
+    <div class="demo" aria-label="Demo controls"><span>Demo</span>
+      <button id="demoOk">✓ Compliant <kbd>C</kbd></button>
+      <button id="demoBad">✗ Non-compliant <kbd>N</kbd></button>
+    </div>
+    <span class="chip cam"><span class="dot"></span> NoIR · CAM 01</span>
+    <span class="chip"><span id="shiftIcon">☀</span> <span id="shiftLabel">Day shift</span> <span class="clock" id="clock">--:--:--</span></span>
+    <button class="icon-btn" id="btnSettings" aria-label="Settings" title="Settings (S)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main class="main">
+    <section class="card feed-card">
+      <div class="feed-head">
+        <div><div class="title">Live feed · Gate A</div><div class="sub">NoIR camera with IR illumination · detects every worker who enters and checks their PPE</div></div>
+        <span class="chip" style="height:30px;font-size:12px"><span class="dot"></span> Detection active</span>
+      </div>
+      <div class="feed" id="feed">
+        <canvas id="scene"></canvas>
+        <canvas id="overlay"></canvas>
+        <div class="hud"><span class="rec"></span> LIVE · CAM 01 · NoIR</div>
+        <div class="hud-r">1920×1080 · 25 FPS · IR · <span id="hudScan"></span></div>
+        <div class="hud-b" id="hudTime"></div>
+        <div class="banner" id="banner"><div class="ic">!</div><div><div class="t" id="bannerT">NON-COMPLIANT ENTRY</div><div class="d" id="bannerD"></div></div><span class="push" id="bannerPush"></span></div>
+      </div>
+      <div class="verdict" id="verdict">
+        <div class="ic" id="vIc">·</div>
+        <div><div class="t" id="vT">Gate clear</div><div class="d" id="vD">Waiting for the next worker</div></div>
+        <div class="items" id="vItems"></div>
+      </div>
+    </section>
+
+    <aside class="col">
+      <div class="card">
+        <div class="stats">
+          <div class="tile wide">
+            <div><div class="l">Workers entered today</div><div class="v" id="nEntered">0</div><div class="s" id="sEntered"></div></div>
+            <div class="spark" id="spark" title="Entries by hour"></div>
+          </div>
+          <div class="tile rate">
+            <div><div class="l">Compliance</div><div class="s" id="sRate" style="margin-top:6px"></div></div>
+            <div class="ring"><svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="36"/><circle class="bar" id="ringBar" cx="42" cy="42" r="36" stroke-dasharray="226.2" stroke-dashoffset="226.2"/></svg><div class="num" id="ringNum">–</div></div>
+          </div>
+          <div class="tile">
+            <div class="l">Alerts today</div><div class="v" id="nAlerts">0</div><div class="s" id="sAlerts"></div>
+          </div>
+        </div>
+        <div class="shifts">
+          <div class="sh" id="shDay"><div class="n">☀ Day <small></small></div><div class="p">–</div><div class="meter"><i></i></div><div class="c"></div></div>
+          <div class="sh" id="shNight"><div class="n">☾ Night <small></small></div><div class="p">–</div><div class="meter"><i></i></div><div class="c"></div></div>
+        </div>
+      </div>
+
+      <div class="card watch">
+        <div class="head"><h2>Watch list</h2><span class="help" id="watchSub"></span><button class="btn sm" id="btnAddItem">+ Add item</button></div>
+        <div class="wl" id="wl"></div>
+        <div class="wform" id="wform" role="dialog" aria-labelledby="wfTitle" hidden>
+          <div class="ft" id="wfTitle">Add to watch list</div>
+          <input class="input" id="wfName" placeholder="Item name, e.g. Red visitor helmet" maxlength="40" autocomplete="off">
+          <input class="input" id="wfDesc" placeholder="What the camera should look for, e.g. a red hard hat" maxlength="140" autocomplete="off">
+          <div class="two">
+            <div class="seg" id="wfSev"><button data-v="critical">Critical</button><button data-v="warning">Warning</button></div>
+            <div class="seg three" id="wfSched"><button data-v="daily">Daily</button><button data-v="dates">Days</button><button data-v="range">Range</button></div>
+          </div>
+          <div id="wfDates" class="dates" hidden><input type="date" class="input" id="wfDate" aria-label="Day"><button class="btn sm" id="wfAddDate">Add day</button><span id="wfDateChips" class="dates"></span></div>
+          <div id="wfRange" class="two" hidden><input type="date" class="input" id="wfFrom" aria-label="From" style="width:100%"><input type="date" class="input" id="wfTo" aria-label="To" style="width:100%"></div>
+          <div class="foot"><span class="help" id="wfErr" style="margin-right:auto"></span><button class="btn sm" id="wfCancel">Cancel</button><button class="btn sm primary" id="wfSave">Save item</button></div>
+        </div>
+      </div>
+
+      <div class="card feed-list">
+        <div style="display:flex;justify-content:space-between;align-items:center"><h2>Live entries</h2><span class="help" id="listSub"></span></div>
+        <div class="list" id="list"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" aria-label="Settings">
+  <button class="icon-btn close" id="btnClose" aria-label="Close">✕</button>
+  <h1>Settings</h1>
+  <div class="help">Required items and their schedules are managed in the Watch list on the dashboard.</div>
+  <div class="group">
+    <h2>Alert sensitivity</h2>
+    <div class="seg" id="sens"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+    <div class="help" id="sensHelp"></div>
+  </div>
+  <div class="group">
+    <h2>Phone alerts</h2>
+    <div class="sw"><div class="l">Push to phone <small>Free, via ntfy. Install the ntfy app and subscribe to the topic.</small></div><button class="toggle" role="switch" aria-checked="false" id="pushOn"></button></div>
+    <input class="input" id="pushTopic" placeholder="ntfy topic, e.g. ppe-gate-a-7f3k" autocomplete="off">
+    <div style="display:flex;gap:10px;align-items:center"><button class="btn" id="btnTest">Send test alert</button><span class="help" id="testOut"></span></div>
+  </div>
+  <div class="group">
+    <h2>Camera</h2>
+    <div class="sw"><label class="l" for="scanSec">Scan interval <small>How often the camera is checked for workers, in seconds (1–60).</small></label><input class="input num" id="scanSec" type="number" min="1" max="60" step="1" inputmode="numeric" aria-label="Scan interval in seconds"></div>
+    <div class="help" id="scanHelp"></div>
+  </div>
+  <div class="group">
+    <h2>Site</h2>
+    <input class="input" id="siteInput" placeholder="Gate name">
+    <div class="sw"><div class="l">Sound on alert</div><button class="toggle" role="switch" aria-checked="false" id="soundOn"></button></div>
+  </div>
+</aside>
+
+<div class="lightbox" id="lightbox"><img alt="Alert snapshot"><div class="cap"></div></div>
+
+<script>
+(() => {
+  'use strict';
+  // ------------------------------------------------------------------ model
+  // Watch list: what the camera checks for. The four built-ins cannot be removed; anything can be
+  // added for a day, a range of days, or every day. `desc` is the plain-words detection target
+  // (on the Pi it is sent verbatim to the vision model).
+  const BUILTIN = [
+    { id: 'hardHat', name: 'Hard hat', desc: 'a hard hat', severity: 'critical', on: true },
+    { id: 'vest', name: 'Safety vest', desc: 'a high-visibility safety vest', severity: 'critical', on: true },
+    { id: 'glasses', name: 'Safety glasses', desc: 'safety glasses', severity: 'warning', on: true },
+    { id: 'gloves', name: 'Gloves', desc: 'work gloves', severity: 'warning', on: false },
+  ].map((b) => ({ ...b, builtin: true, schedule: { type: 'daily' } }));
+  const THRESH = { low: 0.35, medium: 0.5, high: 0.7 };
+  const SENS_HELP = { low: 'Only clear misses alert (confidence under 35%).', medium: 'Items under 50% detection confidence count as missing.', high: 'Borderline detections also alert (under 70%).' };
+  const DEFAULTS = { site: 'Gate A · North Entrance', sensitivity: 'medium', push: { on: false, topic: '' }, sound: false, scanSec: 2, items: BUILTIN };
+  const SCAN_MIN = 1, SCAN_MAX = 60;
+  const clampScan = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(SCAN_MAX, Math.max(SCAN_MIN, n)) : DEFAULTS.scanSec; };
+  let settings = { ...DEFAULTS, ...safe(() => JSON.parse(localStorage.getItem('ppe.settings') || '{}')) };
+  settings.push = { ...DEFAULTS.push, ...(settings.push || {}) };
+  settings.scanSec = clampScan(settings.scanSec);
+  {
+    // rebuild the list: built-ins first (restoring saved state, or the old `required` flags), then custom items
+    const saved = Array.isArray(settings.items) ? settings.items : [];
+    const byId = Object.fromEntries(saved.filter((i) => i && i.id).map((i) => [i.id, i]));
+    const list = BUILTIN.map((b) => ({ ...b, ...(byId[b.id] || {}), builtin: true, on: byId[b.id] ? !!byId[b.id].on : settings.required ? !!settings.required[b.id] : b.on }));
+    for (const i of saved) if (i && i.id && i.name && !list.some((x) => x.id === i.id)) list.push({ severity: 'warning', on: true, schedule: { type: 'daily' }, ...i, builtin: false });
+    settings.items = list; delete settings.required;
+  }
+  function safe(fn, fb = {}) { try { return fn() ?? fb; } catch { return fb; } }
+  function saveSettings() { safe(() => localStorage.setItem('ppe.settings', JSON.stringify(settings))); }
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  const pad = (n) => String(n).padStart(2, '0');
+  const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const fmtD = (k) => new Date(k + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const itemById = (id) => settings.items.find((i) => i.id === id);
+  const nameOf = (id, e) => (itemById(id) || {}).name || (e && e.det[id] && e.det[id].name) || id;
+  function scheduledOn(item, d) {
+    const s = item.schedule || { type: 'daily' }, k = ymd(d);
+    if (s.type === 'dates') return (s.dates || []).includes(k);
+    if (s.type === 'range') return (!s.from || k >= s.from) && (!s.to || k <= s.to);
+    return true;
+  }
+  const activeOn = (item, d) => !!item.on && scheduledOn(item, d);
+  const activeItems = (d) => settings.items.filter((i) => activeOn(i, d));
+  function scheduleWords(item) {
+    const s = item.schedule || { type: 'daily' };
+    if (s.type === 'dates') { const ds = (s.dates || []).map(fmtD); return ds.length > 3 ? `${ds.slice(0, 3).join(', ')} +${ds.length - 3}` : ds.join(', ') || 'No days'; }
+    if (s.type === 'range') return s.from && s.to ? `${fmtD(s.from)} – ${fmtD(s.to)}` : s.from ? `From ${fmtD(s.from)}` : s.to ? `Until ${fmtD(s.to)}` : 'Every day';
+    return 'Every day';
+  }
+  function itemStatus(item) {
+    if (!item.on) return { text: 'Off', cls: '' };
+    const today = ymd(new Date());
+    if (scheduledOn(item, new Date())) return { text: 'Active today', cls: 'on' };
+    const s = item.schedule;
+    const next = s.type === 'dates' ? (s.dates || []).filter((k) => k > today).sort()[0] : s.type === 'range' && s.from > today ? s.from : null;
+    return next ? { text: `From ${fmtD(next)}`, cls: '' } : { text: 'Expired', cls: '' };
+  }
+  const hhmmss = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const pct = (x) => x == null ? '–' : `${Math.round(x * 100)}%`;
+  const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const shiftOf = (d) => (d.getHours() >= 6 && d.getHours() < 18 ? 'day' : 'night');
+  const workers = Array.from({ length: 40 }, (_, i) => `W-${1000 + Math.floor(rnd(0, 900)) + i}`);
+
+  const entries = [];
+  const walkers = [];
+  let lastEntry = null;
+
+  // Simulated detections for every item on the list at the time of entry (required or not).
+  function detect(force, when) {
+    const det = {};
+    const intent = force === undefined ? Math.random() < 0.86 : force;
+    let missed = false;
+    for (const it of settings.items) {
+      const req = activeOn(it, when);
+      let present = intent ? (req ? true : Math.random() < 0.6) : Math.random() < 0.55;
+      if (!intent && req && !present) missed = true;
+      let conf = present ? rnd(0.74, 0.99) : rnd(0.03, 0.28);
+      if (Math.random() < 0.05) conf = rnd(0.42, 0.68);
+      det[it.id] = { present, conf: Math.round(conf * 100) / 100, name: it.name };
+    }
+    if (!intent && !missed) { const req = activeItems(when); if (req.length) { const v = pick(req); det[v.id] = { present: false, conf: Math.round(rnd(0.03, 0.28) * 100) / 100, name: v.name }; } }
+    return det;
+  }
+  // Score against the items active at the entry's time. Items the camera never checked for
+  // (added later) are skipped, so old entries are not retro-flagged.
+  function evaluate(det, when) {
+    const t = THRESH[settings.sensitivity];
+    const missing = settings.items.filter((i) => activeOn(i, when) && det[i.id] && det[i.id].conf < t).map((i) => i.id);
+    const severity = missing.some((id) => (itemById(id) || {}).severity === 'critical') ? 'critical' : 'warning';
+    return { ok: missing.length === 0, missing, severity };
+  }
+  function makeEntry(when, force) {
+    const det = detect(force, when); const v = evaluate(det, when);
+    return { id: Math.random().toString(36).slice(2, 9), ts: when, worker: pick(workers), shift: shiftOf(when), det, ok: v.ok, missing: v.missing, severity: v.severity, seed: Math.random(), photo: null, pushed: null };
+  }
+  // What the box ticks and verdict chips show for an entry: active items, plus built-ins that were off.
+  function tickLines(e) {
+    const out = [];
+    for (const it of settings.items) {
+      const d = e.det[it.id]; if (!d) continue;
+      const req = activeOn(it, e.ts), miss = e.missing.includes(it.id);
+      if (!req && !it.builtin) continue;
+      out.push({ req, miss, name: it.name, conf: d.conf, txt: `${!req ? '·' : miss ? '✗' : '✓'} ${it.name}${req ? '  ' + Math.round(d.conf * 100) + '%' : ''}` });
+    }
+    return out.slice(0, 7);
+  }
+  function seed() {
+    const now = new Date();
+    for (let off = 1; off >= 0; off--) {
+      const d0 = dayStart(new Date(now.getFullYear(), now.getMonth(), now.getDate() - off));
+      const upto = off ? 24 : (now - d0) / 36e5;
+      const n = Math.round(upto * 4.2);
+      for (let i = 0; i < n; i++) {
+        const r = Math.random();
+        const h = r < 0.45 && upto > 6 ? rnd(6, Math.min(8.5, upto)) : r < 0.7 && upto > 18 ? rnd(18, Math.min(20.5, upto)) : rnd(0, upto);
+        const t = new Date(d0); t.setHours(Math.floor(h), Math.floor((h % 1) * 60), Math.floor(rnd(0, 60)), 0);
+        if (t < now) entries.push(makeEntry(t));
+      }
+    }
+    entries.sort((a, b) => a.ts - b.ts);
+  }
+
+  function stats() {
+    const now = new Date(), t0 = dayStart(now);
+    const y0 = new Date(t0); y0.setDate(t0.getDate() - 1); const yCut = new Date(now); yCut.setDate(now.getDate() - 1);
+    const today = entries.filter((e) => e.ts >= t0);
+    const yest = entries.filter((e) => e.ts >= y0 && e.ts < yCut).length;
+    const ok = today.filter((e) => e.ok).length;
+    const byShift = {};
+    for (const s of ['day', 'night']) { const l = today.filter((e) => e.shift === s); const k = l.filter((e) => e.ok).length; byShift[s] = { n: l.length, rate: l.length ? k / l.length : null, alerts: l.length - k }; }
+    const hourly = Array(24).fill(0); for (const e of today) hourly[e.ts.getHours()]++;
+    const miss = {}; for (const e of today) for (const m of e.missing) miss[m] = (miss[m] || 0) + 1;
+    const top = Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id, n]) => `${nameOf(id)} ×${n}`);
+    return { today: today.length, ok, rate: today.length ? ok / today.length : null, alerts: today.length - ok, top, yest, byShift, hourly, shift: shiftOf(now) };
+  }
+
+  // ------------------------------------------------------------------ dom
+  const $ = (s) => document.querySelector(s);
+  const el = (tag, attrs = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v); } n.append(...kids); return n; };
+
+  // ------------------------------------------------------------------ scene
+  const feed = $('#feed'), scene = $('#scene'), overlay = $('#overlay');
+  const sctx = scene.getContext('2d'), octx = overlay.getContext('2d');
+  let W = 960, H = 540, grain, scan;
+  function size() {
+    const r = feed.getBoundingClientRect(); const dpr = Math.min(2, devicePixelRatio || 1);
+    W = Math.max(320, Math.round(r.width)); H = Math.max(180, Math.round(r.height));
+    for (const c of [scene, overlay]) { c.width = W * dpr; c.height = H * dpr; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
+    grain = document.createElement('canvas'); grain.width = grain.height = 256;
+    const g = grain.getContext('2d'), im = g.createImageData(256, 256);
+    for (let i = 0; i < im.data.length; i += 4) { const v = 128 + (Math.random() - .5) * 60; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+    g.putImageData(im, 0, 0);
+    scan = document.createElement('canvas'); scan.width = 4; scan.height = 4;
+    const s = scan.getContext('2d'); s.fillStyle = 'rgba(0,0,0,.18)'; s.fillRect(0, 0, 4, 1);
+  }
+  new ResizeObserver(size).observe(feed);
+
+  function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+  function background(ctx, W, H) {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#07090c'); g.addColorStop(.6, '#141a1f'); g.addColorStop(1, '#2b3238');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // IR flood from the camera: hot centre, falls off
+    const ir = ctx.createRadialGradient(W * .5, H * .72, 10, W * .5, H * .72, W * .62);
+    ir.addColorStop(0, 'rgba(225,232,238,.20)'); ir.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = ir; ctx.fillRect(0, 0, W, H);
+    // light pole
+    ctx.fillStyle = '#3d454c'; ctx.fillRect(W * .12, H * .14, W * .006, H * .66);
+    const lp = ctx.createRadialGradient(W * .125, H * .14, 2, W * .125, H * .14, H * .25);
+    lp.addColorStop(0, 'rgba(240,244,248,.9)'); lp.addColorStop(.15, 'rgba(240,244,248,.25)'); lp.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = lp; ctx.fillRect(0, 0, W, H);
+    // ground with perspective lines
+    ctx.fillStyle = '#1c2227'; ctx.fillRect(0, H * .8, W, H * .2);
+    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, H * (.82 + i * .045)); ctx.lineTo(W, H * (.82 + i * .045)); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(W * .5, H * .8); ctx.lineTo(W * .5, H); ctx.strokeStyle = 'rgba(255,220,120,.35)'; ctx.setLineDash([8, 10]); ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]);
+    // fences
+    ctx.fillStyle = '#444c54';
+    for (let i = 0; i < 11; i++) { ctx.fillRect(W * (.02 + i * .026), H * .44, W * .005, H * .36); ctx.fillRect(W * (.70 + i * .027), H * .44, W * .005, H * .36); }
+    ctx.fillRect(0, H * .5, W * .3, H * .006); ctx.fillRect(W * .7, H * .5, W * .3, H * .006);
+    // gate frame + sign
+    ctx.fillStyle = '#5d666f'; ctx.fillRect(W * .3, H * .2, W * .012, H * .6); ctx.fillRect(W * .688, H * .2, W * .012, H * .6); ctx.fillRect(W * .3, H * .2, W * .4, H * .014);
+    const pw = W * .3, ph = H * .07;
+    rr(ctx, W * .5 - pw / 2, H * .25, pw, ph, 6); ctx.fillStyle = '#d9dee3'; ctx.fill();
+    let fs = Math.round(H * .026); ctx.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`;
+    while (ctx.measureText('SITE ENTRY · PPE REQUIRED').width > pw * .86 && fs > 8) { fs--; ctx.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`; }
+    ctx.fillStyle = '#1a1f24'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('SITE ENTRY · PPE REQUIRED', W * .5, H * .25 + ph / 2 + 1); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+  function post(ctx, W, H, f) {
+    if (!grain) return;
+    ctx.globalAlpha = .14; ctx.globalCompositeOperation = 'overlay';
+    const ox = (f * 37) % 256, oy = (f * 53) % 256;
+    for (let y = -oy; y < H; y += 256) for (let x = -ox; x < W; x += 256) ctx.drawImage(grain, x, y);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = ctx.createPattern(scan, 'repeat'); ctx.fillRect(0, 0, W, H);
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, W * .72);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.6)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+  }
+  // Worker figure in IR greys. Hi-vis and hard hat read as bright shapes; bare skin as mid grey.
+  function worker(ctx, x, baseY, h, det, seed, ph) {
+    const sw = Math.sin(ph * Math.PI * 2);
+    const skin = `rgb(${150 + seed * 50},${150 + seed * 50},${150 + seed * 50})`;
+    const shirt = det.vest.present ? '#e6eaee' : '#5f666d';
+    ctx.save(); ctx.translate(x, baseY); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // legs + boots
+    ctx.strokeStyle = '#80878e'; ctx.lineWidth = h * .075;
+    const lg = sw * h * .06;
+    ctx.beginPath(); ctx.moveTo(-h * .05, -h * .46); ctx.lineTo(-h * .05 + lg, -h * .02); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(h * .05, -h * .46); ctx.lineTo(h * .05 - lg, -h * .02); ctx.stroke();
+    ctx.fillStyle = '#2f353b'; rr(ctx, -h * .05 + lg - h * .06, -h * .05, h * .12, h * .05, 3); ctx.fill(); rr(ctx, h * .05 - lg - h * .06, -h * .05, h * .12, h * .05, 3); ctx.fill();
+    // torso
+    const top = -h * .82, th = h * .38, tw = h * .3;
+    ctx.fillStyle = shirt; rr(ctx, -tw / 2, top, tw, th, h * .05); ctx.fill();
+    if (det.vest.present) { ctx.fillStyle = '#ffffff'; ctx.fillRect(-tw / 2, top + th * .38, tw, h * .028); ctx.fillRect(-tw / 2, top + th * .62, tw, h * .028); ctx.fillRect(-h * .02, top, h * .04, th); }
+    // arms + gloves
+    ctx.strokeStyle = det.vest.present ? '#c7ced5' : '#5f666d'; ctx.lineWidth = h * .06;
+    const ax = h * .19, ay = top + h * .04;
+    ctx.beginPath(); ctx.moveTo(-tw / 2 + h * .02, ay); ctx.lineTo(-ax - sw * h * .07, top + th * .95); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tw / 2 - h * .02, ay); ctx.lineTo(ax + sw * h * .07, top + th * .95); ctx.stroke();
+    ctx.fillStyle = det.gloves.present ? '#dfe4e9' : skin;
+    ctx.beginPath(); ctx.arc(-ax - sw * h * .07, top + th * .98, h * .035, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(ax + sw * h * .07, top + th * .98, h * .035, 0, 7); ctx.fill();
+    // custom watch-list items that are present: bright tags (armband, belt clip, chest badge)
+    const spots = [[tw / 2 + h * .035, top + th * .3], [-tw / 2 - h * .035, top + th * .3], [0, top + th - h * .015], [h * .06, top + th * .18]];
+    let k = 0;
+    for (const id of Object.keys(det)) {
+      if (!det[id].present || ['hardHat', 'vest', 'glasses', 'gloves'].includes(id) || k >= spots.length) continue;
+      const [sx, sy] = spots[k++];
+      ctx.fillStyle = '#ffffff'; rr(ctx, sx - h * .035, sy - h * .016, h * .07, h * .032, 3); ctx.fill();
+      ctx.strokeStyle = '#1a1f24'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    // neck + head
+    ctx.fillStyle = skin; ctx.fillRect(-h * .025, top - h * .03, h * .05, h * .04);
+    const hy = top - h * .105, hr = h * .082;
+    ctx.beginPath(); ctx.arc(0, hy, hr, 0, 7); ctx.fill();
+    if (det.glasses.present) { ctx.fillStyle = '#14181c'; rr(ctx, -hr * .95, hy - hr * .3, hr * 1.9, hr * .38, 3); ctx.fill(); }
+    if (det.hardHat.present) {
+      ctx.fillStyle = '#f5f7f9'; ctx.beginPath(); ctx.arc(0, hy - hr * .15, hr * 1.18, Math.PI, 0); ctx.closePath(); ctx.fill();
+      rr(ctx, -hr * 1.5, hy - hr * .25, hr * 3, hr * .26, 3); ctx.fill();
+    } else { ctx.fillStyle = '#2d3238'; ctx.beginPath(); ctx.arc(0, hy - hr * .18, hr * .98, Math.PI, 0); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  }
+  const box = (x, baseY, h) => ({ x: x - h * .25, y: baseY - h * 1.02, w: h * .5, h: h * 1.04 });
+
+  function drawBoxes(ctx, list, font) {
+    for (const b of list) {
+      const e = b.entry, scanning = b.scanning;
+      const color = scanning ? '#f6c543' : e.ok ? '#2fd36f' : '#ff5a5a';
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(scanning ? [6, 6] : []);
+      rr(ctx, b.x, b.y, b.w, b.h, 6); ctx.stroke(); ctx.setLineDash([]);
+      ctx.lineWidth = 3; const t = Math.min(16, b.w * .22);
+      for (const [cx, cy, sx, sy] of [[b.x, b.y, 1, 1], [b.x + b.w, b.y, -1, 1], [b.x, b.y + b.h, 1, -1], [b.x + b.w, b.y + b.h, -1, -1]]) { ctx.beginPath(); ctx.moveTo(cx, cy + sy * t); ctx.lineTo(cx, cy); ctx.lineTo(cx + sx * t, cy); ctx.stroke(); }
+      if (scanning) { // sweep line
+        const sy = b.y + ((performance.now() / 6) % b.h); ctx.globalAlpha = .7; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(b.x + 2, sy); ctx.lineTo(b.x + b.w - 2, sy); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      const label = scanning ? `${e.worker} · SCANNING` : e.ok ? `${e.worker} · ✓ COMPLIANT` : `${e.worker} · ✗ MISSING ${e.missing.map((m) => nameOf(m, e).toUpperCase()).join(', ')}`;
+      const cw = ctx.canvas.width / (ctx.getTransform().a || 1);
+      ctx.font = `700 12px ${font}`; const tw = ctx.measureText(label).width + 16;
+      const ly = b.y - 26 < 6 ? b.y + b.h + 6 : b.y - 26;
+      const lx0 = Math.max(6, Math.min(b.x, cw - tw - 6));
+      ctx.fillStyle = color; rr(ctx, lx0, ly, tw, 20, 5); ctx.fill();
+      ctx.fillStyle = '#0a0c10'; ctx.fillText(label, lx0 + 8, ly + 14);
+      if (!scanning) {
+        let yy = b.y + 6; ctx.font = `600 11.5px ${font}`;
+        const lines = tickLines(e);
+        const colW = Math.max(0, ...lines.map((l) => ctx.measureText(l.txt).width + 12));
+        const right = b.x + b.w + 8 + colW <= cw - 6;
+        for (const l of lines) {
+          const c = !l.req ? 'rgba(210,215,220,.6)' : l.miss ? '#ff5a5a' : '#2fd36f';
+          const w = ctx.measureText(l.txt).width + 12;
+          const lx = right ? b.x + b.w + 8 : Math.max(6, b.x - 8 - w);
+          ctx.fillStyle = 'rgba(5,7,10,.78)'; rr(ctx, lx, yy, w, 18, 4); ctx.fill();
+          ctx.fillStyle = c; ctx.fillText(l.txt, lx + 6, yy + 13); yy += 21;
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  let frame = 0;
+  const LOCK_AT = 0.4; // fraction of the walk where the worker reaches the gate line
+  function tick(now) {
+    frame++;
+    background(sctx, W, H);
+    const boxes = [];
+    for (let i = walkers.length - 1; i >= 0; i--) {
+      const wk = walkers[i]; const p = (now - wk.t0) / wk.dur;
+      if (p >= 1) { walkers.splice(i, 1); continue; }
+      const x = W * (1.14 - p * 1.3), baseY = H * .9 - wk.entry.seed * H * .04, h = H * .58;
+      worker(sctx, x, baseY, h, wk.entry.det, wk.entry.seed, p * 7);
+      if (!wk.locked && p >= LOCK_AT) { wk.locked = true; commit(wk.entry); }
+      if (p > 0.06) boxes.push({ ...box(x, baseY, h), entry: wk.entry, scanning: !wk.locked });
+    }
+    post(sctx, W, H, frame);
+    octx.clearRect(0, 0, W, H);
+    drawBoxes(octx, boxes, getComputedStyle(document.body).fontFamily);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // evidence still for the feed list
+  function still(e) {
+    if (e.photo) return e.photo;
+    const c = document.createElement('canvas'); c.width = 960; c.height = 540; const ctx = c.getContext('2d');
+    background(ctx, 960, 540);
+    const x = 960 * (.58 + e.seed * .1), baseY = 540 * .9 - e.seed * 540 * .04, h = 540 * .58;
+    worker(ctx, x, baseY, h, e.det, e.seed, e.seed);
+    post(ctx, 960, 540, 7);
+    drawBoxes(ctx, [{ ...box(x, baseY, h), entry: e, scanning: false }], getComputedStyle(document.body).fontFamily);
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 514, 960, 26);
+    ctx.fillStyle = '#d9e2ec'; ctx.font = '500 13px ui-monospace, monospace'; ctx.fillText(`CAM 01 · ${settings.site} · ${e.ts.toLocaleString()} · ${e.worker}`, 10, 531);
+    e.photo = c.toDataURL('image/jpeg', .72); return e.photo;
+  }
+
+  // ------------------------------------------------------------------ flow
+  let autoTimer = null;
+  // Workers are only noticed on a scan tick, so the next arrival snaps to a multiple of the scan interval.
+  function schedule() { clearTimeout(autoTimer); const step = settings.scanSec * 1000; autoTimer = setTimeout(() => { spawn(); schedule(); }, Math.ceil(rnd(14000, 30000) / step) * step); }
+  // One worker in the scan zone at a time: extra requests queue up and follow a beat later.
+  const queue = [];
+  function spawn(force) { queue.push(force); schedule(); pump(); }
+  function pump() {
+    if (!queue.length) return;
+    const busy = walkers.some((w) => (performance.now() - w.t0) / w.dur < 0.5);
+    if (busy) { setTimeout(pump, 300); return; }
+    const e = makeEntry(new Date(), queue.shift());
+    walkers.push({ entry: e, t0: performance.now(), dur: 6000, locked: false });
+    // keep the previous verdict on screen while that worker is still walking through
+    if (!walkers.some((w) => w.locked)) showVerdict(e, 'scan');
+    if (queue.length) setTimeout(pump, 300);
+  }
+  function commit(e) {
+    e.ts = new Date(); e.shift = shiftOf(e.ts);
+    entries.push(e); lastEntry = e;
+    showVerdict(e); render();
+    if (!e.ok) alarm(e);
+  }
+  function alarm(e) {
+    const what = e.missing.map((m) => nameOf(m, e)).join(', ');
+    feed.classList.remove('alarm'); void feed.offsetWidth; feed.classList.add('alarm');
+    $('#bannerT').textContent = e.severity === 'critical' ? 'NON-COMPLIANT ENTRY' : 'PPE WARNING';
+    $('#bannerD').textContent = `${e.worker} entered without ${what} · ${hhmmss(e.ts)}`;
+    $('#bannerPush').textContent = settings.push.on && settings.push.topic ? 'Sending to phone…' : '';
+    $('#banner').classList.add('show');
+    clearTimeout(alarm.t); alarm.t = setTimeout(() => $('#banner').classList.remove('show'), 6000);
+    if (settings.sound) beep();
+    if (settings.push.on && settings.push.topic) push(e).then((r) => { e.pushed = r; $('#bannerPush').textContent = r === 'sent' ? '✓ Pushed to phone' : 'Push failed'; render(); });
+  }
+  async function push(e, test) {
+    const body = test ? `Test alert from ${settings.site}. Phone alerts are working.` : `${settings.site}: ${e.worker} entered without ${e.missing.map((m) => nameOf(m, e)).join(', ')} at ${hhmm(e.ts)}.`;
+    try { const r = await fetch(`https://ntfy.sh/${encodeURIComponent(settings.push.topic)}`, { method: 'POST', body, headers: { Title: test ? 'PPE Monitor test' : `PPE alert · ${e.worker}`, Priority: '4', Tags: 'warning' } }); return r.ok ? 'sent' : `failed (${r.status})`; }
+    catch (err) { return `failed (${err.message})`; }
+  }
+  let audio;
+  function beep() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); const o = audio.createOscillator(), g = audio.createGain(); o.type = 'triangle'; o.frequency.value = 740; g.gain.value = .08; o.connect(g); g.connect(audio.destination); o.start(); o.frequency.setValueAtTime(520, audio.currentTime + .14); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .4); o.stop(audio.currentTime + .4); } catch { /* no audio */ } }
+
+  // ------------------------------------------------------------------ render
+  function showVerdict(e, mode) {
+    const v = $('#verdict'); v.className = 'verdict ' + (mode === 'scan' ? 'scan' : e ? (e.ok ? 'ok' : 'bad') : '');
+    if (!e) { $('#vIc').textContent = '·'; $('#vT').textContent = 'Gate clear'; $('#vD').textContent = 'Waiting for the next worker'; $('#vItems').replaceChildren(); return; }
+    if (mode === 'scan') { $('#vIc').textContent = '⟳'; $('#vT').textContent = 'Worker approaching'; $('#vD').textContent = `${e.worker} · checking PPE…`; $('#vItems').replaceChildren(); return; }
+    $('#vIc').textContent = e.ok ? '✓' : '✗';
+    $('#vT').textContent = e.ok ? 'Compliant' : 'Non-compliant';
+    $('#vD').textContent = e.ok ? `${e.worker} · ${hhmmss(e.ts)} · all required PPE detected` : `${e.worker} · ${hhmmss(e.ts)} · missing ${e.missing.map((m) => nameOf(m, e)).join(', ')}`;
+    $('#vItems').replaceChildren(...tickLines(e).map((l) =>
+      el('span', { class: `item ${!l.req ? 'off' : l.miss ? 'bad' : 'ok'}`, title: `${Math.round(l.conf * 100)}% confidence` }, el('b', { text: !l.req ? '·' : l.miss ? '✗' : '✓' }), document.createTextNode(l.name))));
+  }
+
+  const ringColor = (r) => r == null ? 'rgba(255,255,255,.2)' : r >= .9 ? 'var(--good)' : r >= .75 ? 'var(--warning)' : 'var(--critical)';
+  let shownEntered = null;
+  function countTo(node, target) {
+    const from = shownEntered ?? target; shownEntered = target;
+    if (from === target) { node.textContent = target; return; }
+    const t0 = performance.now(); const step = (t) => { const k = Math.min(1, (t - t0) / 600); node.textContent = Math.round(from + (target - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step);
+  }
+  function render() {
+    const s = stats();
+    countTo($('#nEntered'), s.today);
+    const diff = s.today - s.yest; const se = $('#sEntered'); se.textContent = `${diff >= 0 ? '+' : ''}${diff} vs yesterday at this time`; se.className = 's ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
+    const maxH = Math.max(1, ...s.hourly); const nowH = new Date().getHours();
+    $('#spark').replaceChildren(...s.hourly.map((v, h) => el('i', { class: h === nowH ? 'now' : '', style: `height:${Math.max(2, (v / maxH) * 40)}px`, title: `${pad(h)}:00 · ${v} entries` })));
+    $('#sRate').textContent = s.today ? `${s.ok} of ${s.today} workers fully compliant` : 'No entries yet';
+    const bar = $('#ringBar'); bar.style.stroke = ringColor(s.rate); bar.setAttribute('stroke-dashoffset', (226.2 * (1 - (s.rate || 0))).toFixed(1)); $('#ringNum').textContent = pct(s.rate);
+    $('#nAlerts').textContent = s.alerts; const sa = $('#sAlerts'); sa.textContent = s.alerts ? s.top.join(' · ') : 'All clear'; sa.className = 's ' + (s.alerts ? 'down' : 'up');
+    for (const k of ['day', 'night']) {
+      const row = $(k === 'day' ? '#shDay' : '#shNight'), b = s.byShift[k];
+      row.querySelector('small').textContent = s.shift === k ? '● live' : '';
+      row.querySelector('.c').textContent = `${b.n} entered · ${b.alerts} alert${b.alerts === 1 ? '' : 's'}`;
+      const m = row.querySelector('.meter i'); m.style.width = `${Math.round((b.rate || 0) * 100)}%`; m.style.background = ringColor(b.rate);
+      row.querySelector('.p').textContent = pct(b.rate);
+    }
+    $('#shiftLabel').textContent = s.shift === 'day' ? 'Day shift' : 'Night shift'; $('#shiftIcon').textContent = s.shift === 'day' ? '☀' : '☾';
+    renderWatch();
+    renderList();
+  }
+  const rendered = new Set();
+  function renderList() {
+    const list = $('#list'); const recent = entries.slice(-40).reverse();
+    const nodes = recent.map((e) => {
+      const row = el('div', { class: `row-e ${e.ok ? 'ok' : 'bad ' + (e.severity || 'critical')}`, 'data-id': e.id });
+      if (!rendered.has(e.id)) rendered.add(e.id); else row.style.animation = 'none';
+      const names = e.missing.map((m) => nameOf(m, e)).join(', ');
+      const ic = e.ok ? el('div', { class: 'ic', text: '✓' }) : el('img', { class: 'ic', src: still(e), alt: `Snapshot of ${e.worker}`, onclick: () => { const lb = $('#lightbox'); lb.querySelector('img').src = still(e); lb.querySelector('.cap').textContent = `${e.worker} · ${e.ts.toLocaleString()} · missing ${names}`; lb.classList.add('open'); } });
+      const t = el('div', { class: 't', text: hhmm(e.ts) });
+      if (e.pushed === 'sent') t.append(el('span', { class: 'pushed', text: '📱 pushed' }));
+      row.append(ic, el('div', {}, el('div', { class: 'w', text: e.worker }), el('div', { class: 'm', text: e.ok ? 'All required PPE detected' : `Missing ${names}${e.severity === 'warning' ? ' · warning' : ''}` })), t);
+      return row;
+    });
+    list.replaceChildren(...nodes);
+    $('#listSub').textContent = `${entries.filter((e) => e.ts >= dayStart(new Date())).length} today`;
+  }
+
+  // ------------------------------------------------------------------ settings
+  const on = (n) => n.getAttribute('aria-checked') === 'true';
+  const setOn = (n, v) => n.setAttribute('aria-checked', v ? 'true' : 'false');
+  function reapply() {
+    for (const e of entries) { const v = evaluate(e.det, e.ts); e.ok = v.ok; e.missing = v.missing; e.severity = v.severity; e.photo = null; }
+    $('#siteName').textContent = settings.site; saveSettings(); render(); if (lastEntry) showVerdict(lastEntry);
+  }
+
+  // ------------------------------------------------------------------ watch list card
+  let editing = null;
+  const form = { sev: 'critical', sched: 'daily', dates: [] };
+  function renderWatch() {
+    $('#wl').replaceChildren(...settings.items.map((it) => {
+      const st = itemStatus(it);
+      const row = el('div', { class: `wi ${it.on ? '' : 'off'}` });
+      const t = el('button', { class: 'toggle sm', role: 'switch', 'aria-checked': String(!!it.on), 'aria-label': `Enable ${it.name}` });
+      t.addEventListener('click', () => { it.on = !it.on; reapply(); });
+      const mid = el('div', {}, el('div', { class: 'n', text: it.name }, el('span', { class: `tag ${it.severity}`, text: it.severity })), el('div', { class: `st ${st.cls}`, text: `${st.text} · ${scheduleWords(it)}` }));
+      const act = el('div', { class: 'act' }, el('button', { title: 'Edit', 'aria-label': `Edit ${it.name}`, text: '✎', onclick: () => openForm(it) }));
+      if (!it.builtin) act.append(el('button', { title: 'Remove', 'aria-label': `Remove ${it.name}`, text: '✕', onclick: () => { settings.items = settings.items.filter((x) => x !== it); if (editing === it) closeForm(); reapply(); } }));
+      row.append(t, mid, act); return row;
+    }));
+    const n = activeItems(new Date()).length;
+    $('#watchSub').textContent = `${n} required today`;
+  }
+  function openForm(it) {
+    editing = it || null;
+    form.sev = it ? it.severity : 'critical'; form.sched = it ? (it.schedule || {}).type || 'daily' : 'daily'; form.dates = it && it.schedule && it.schedule.dates ? [...it.schedule.dates] : [];
+    $('#wfName').value = it ? it.name : ''; $('#wfDesc').value = it ? it.desc || '' : '';
+    $('#wfFrom').value = (it && it.schedule && it.schedule.from) || ''; $('#wfTo').value = (it && it.schedule && it.schedule.to) || '';
+    $('#wfDate').value = ymd(new Date()); $('#wfErr').textContent = '';
+    $('#wfSave').textContent = it ? 'Save changes' : 'Add to watch list';
+    $('#wfTitle').textContent = it ? `Edit ${it.name}` : 'Add to watch list';
+    $('#wform').hidden = false; document.body.classList.add('wform'); syncForm(); $('#wfName').focus();
+  }
+  function closeForm() { $('#wform').hidden = true; document.body.classList.remove('wform'); editing = null; }
+  function syncForm() {
+    document.querySelectorAll('#wfSev button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === form.sev)));
+    document.querySelectorAll('#wfSched button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === form.sched)));
+    $('#wfDates').hidden = form.sched !== 'dates'; $('#wfRange').hidden = form.sched !== 'range';
+    $('#wfDateChips').replaceChildren(...form.dates.map((k) => el('span', { class: 'dchip', text: fmtD(k) }, el('button', { text: '✕', 'aria-label': `Remove ${fmtD(k)}`, onclick: () => { form.dates = form.dates.filter((x) => x !== k); syncForm(); } }))));
+  }
+  $('#wfSev').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) { form.sev = b.dataset.v; syncForm(); } });
+  $('#wfSched').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) { form.sched = b.dataset.v; syncForm(); } });
+  $('#wfAddDate').addEventListener('click', () => { const k = $('#wfDate').value; if (k && !form.dates.includes(k)) { form.dates.push(k); form.dates.sort(); syncForm(); } });
+  $('#wfCancel').addEventListener('click', closeForm);
+  $('#btnAddItem').addEventListener('click', () => openForm(null));
+  $('#wfSave').addEventListener('click', () => {
+    const err = $('#wfErr'); const name = $('#wfName').value.trim(), desc = $('#wfDesc').value.trim();
+    if (!name) { err.textContent = 'Give the item a name.'; $('#wfName').focus(); return; }
+    let schedule = { type: 'daily' };
+    if (form.sched === 'dates') { if (!form.dates.length) { err.textContent = 'Add at least one day.'; return; } schedule = { type: 'dates', dates: [...form.dates] }; }
+    if (form.sched === 'range') {
+      const from = $('#wfFrom').value, to = $('#wfTo').value;
+      if (!from && !to) { err.textContent = 'Set a start or end date.'; return; }
+      if (from && to && from > to) { err.textContent = 'The range ends before it starts.'; return; }
+      schedule = { type: 'range', from, to };
+    }
+    const added = !editing;
+    if (!added) Object.assign(editing, { name, desc: desc || editing.desc || name.toLowerCase(), severity: form.sev, schedule });
+    else settings.items.push({ id: 'c_' + Math.random().toString(36).slice(2, 8), name, desc: desc || name.toLowerCase(), severity: form.sev, on: true, builtin: false, schedule });
+    closeForm(); reapply();
+    if (added) { const last = $('#wl').lastElementChild; if (last) last.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  });
+  $('#wform').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.matches('input:not([type=date])')) { ev.preventDefault(); $('#wfSave').click(); } });
+
+  function buildSettings() {
+    document.querySelectorAll('#sens button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.v === settings.sensitivity)); b.onclick = () => { settings.sensitivity = b.dataset.v; buildSettings(); reapply(); }; });
+    $('#sensHelp').textContent = SENS_HELP[settings.sensitivity];
+    setOn($('#pushOn'), settings.push.on); $('#pushTopic').value = settings.push.topic;
+    $('#siteInput').value = settings.site; setOn($('#soundOn'), settings.sound);
+    $('#scanSec').value = settings.scanSec; scanHelp();
+  }
+  function scanHelp() { const n = settings.scanSec; $('#scanHelp').textContent = n === 1 ? 'Checks the camera every second. Fastest alerts, highest CPU load on the Pi.' : `Checks the camera every ${n} seconds.${n >= 10 ? ' A worker can walk through the gate between checks.' : ''}`; $('#hudScan').textContent = `SCAN ${n}s`; }
+  function setScan(v) { settings.scanSec = clampScan(v); saveSettings(); scanHelp(); schedule(); }
+  $('#pushOn').addEventListener('click', () => { setOn($('#pushOn'), !on($('#pushOn'))); settings.push.on = on($('#pushOn')); saveSettings(); });
+  $('#soundOn').addEventListener('click', () => { setOn($('#soundOn'), !on($('#soundOn'))); settings.sound = on($('#soundOn')); saveSettings(); });
+  $('#pushTopic').addEventListener('input', (ev) => { settings.push.topic = ev.target.value.trim(); saveSettings(); });
+  $('#scanSec').addEventListener('input', (ev) => { if (ev.target.value !== '') setScan(ev.target.value); });
+  $('#scanSec').addEventListener('change', (ev) => { setScan(ev.target.value); ev.target.value = settings.scanSec; });
+  $('#siteInput').addEventListener('input', (ev) => { settings.site = ev.target.value.trim() || DEFAULTS.site; $('#siteName').textContent = settings.site; saveSettings(); });
+  $('#btnTest').addEventListener('click', async () => { const o = $('#testOut'); if (!settings.push.topic) { o.textContent = 'Enter a topic first.'; return; } o.textContent = 'Sending…'; o.textContent = await push(null, true); });
+  const openSettings = (v) => { document.body.classList.toggle('settings', v); if (v) buildSettings(); };
+  $('#btnSettings').addEventListener('click', () => openSettings(true));
+  $('#btnClose').addEventListener('click', () => openSettings(false));
+  $('#backdrop').addEventListener('click', () => { openSettings(false); closeForm(); });
+
+  // ------------------------------------------------------------------ wiring
+  $('#demoOk').addEventListener('click', () => spawn(true));
+  $('#demoBad').addEventListener('click', () => spawn(false));
+  $('#lightbox').addEventListener('click', () => $('#lightbox').classList.remove('open'));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.target.matches('input, textarea') || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const k = ev.key.toLowerCase();
+    if (document.body.classList.contains('wform')) { if (k === 'escape') closeForm(); return; }
+    if (k === 'c') spawn(true); else if (k === 'n') spawn(false); else if (k === 's') openSettings(!document.body.classList.contains('settings'));
+    else if (k === 'escape') { $('#lightbox').classList.remove('open'); openSettings(false); closeForm(); }
+  });
+  setInterval(() => { const d = new Date(); $('#clock').textContent = hhmmss(d); $('#hudTime').textContent = `${d.toLocaleDateString()} ${hhmmss(d)}`; }, 1000);
+
+  size(); seed(); $('#siteName').textContent = settings.site; scanHelp(); render(); showVerdict(null);
+  setTimeout(() => spawn(), 1800);
+})();
+</script>
+</body>
+</html>
