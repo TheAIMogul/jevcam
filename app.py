@@ -34,6 +34,11 @@ STREAM_QUALITY = 70              # MJPEG quality
 STALL_SECS = 3.0                 # no frames this long -> restart the camera stream
 PRESENCE_DRAW_THRESHOLD = 0.5    # draw a box only if presence noul >= this
 BOX_CONF_FLOOR = 0.15            # and box confidence >= this
+# Jev's presence can hover around 50% and flip every sample. Hold an alarm on for
+# a few seconds after the last sample over the threshold, and only log a target
+# as cleared after it has been missing this long, so neither flickers.
+ALARM_HOLD_S = 6.0
+CLEAR_HOLD_S = 5.0
 
 BOX_COLORS = [
     (0, 200, 255), (0, 220, 120), (255, 170, 0), (255, 90, 160),
@@ -73,6 +78,8 @@ EVENTS = deque(maxlen=150)
 HITS = {}                          # label -> times it went from absent to present
 TIMELINE_LOCK = threading.Lock()
 _prev = {"present": {}, "alert": False, "camera_ok": None, "error": None, "alarms": 0}
+_last_hot = {}                     # label -> last time it was over the threshold
+_alarm = {"last_hot": 0.0, "target": None}
 
 
 def _event(kind, label, value=None):
@@ -87,14 +94,20 @@ def record_sample(detections, alert):
         labels = {d["label"] for d in detections}
         for gone in set(_prev["present"]) - labels:      # target removed from the list
             del _prev["present"][gone]
+            _last_hot.pop(gone, None)
+        now = time.time()
         for d in detections:
-            was = _prev["present"].get(d["label"], False)
-            if d["present"] and not was:
-                _event("detected", d["label"], d["presence"])
-                HITS[d["label"]] = HITS.get(d["label"], 0) + 1
-            elif was and not d["present"]:
-                _event("cleared", d["label"], d["presence"])
-            _prev["present"][d["label"]] = d["present"]
+            label = d["label"]
+            if d["present"]:
+                _last_hot[label] = now
+            steady = now - _last_hot.get(label, 0) <= CLEAR_HOLD_S
+            was = _prev["present"].get(label, False)
+            if steady and not was:
+                _event("detected", label, d["presence"])
+                HITS[label] = HITS.get(label, 0) + 1
+            elif was and not steady:
+                _event("cleared", label, d["presence"])
+            _prev["present"][label] = steady
         if alert["active"] != _prev["alert"]:
             _event("alarm" if alert["active"] else "alarm_end", alert.get("phrase") or "alarm",
                    alert.get("presence"))
@@ -392,8 +405,12 @@ def detect_loop():
             if alert_target:
                 ap = resp.get("answers", {}).get("alert_present", {}).get("noul")
                 alert["presence"] = ap
-                alert["active"] = bool(alert_enabled and ap is not None
-                                       and ap >= PRESENCE_DRAW_THRESHOLD)
+                if _alarm["target"] != alert_target:      # new alarm target: start fresh
+                    _alarm.update(target=alert_target, last_hot=0.0)
+                if ap is not None and ap >= PRESENCE_DRAW_THRESHOLD:
+                    _alarm["last_hot"] = time.time()
+                alert["active"] = bool(alert_enabled
+                                       and time.time() - _alarm["last_hot"] <= ALARM_HOLD_S)
         except Exception as e:  # noqa: BLE001
             err = str(e)
         latency = int((time.time() - t0) * 1000)

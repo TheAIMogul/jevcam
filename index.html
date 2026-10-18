@@ -6,7 +6,7 @@
 <title>JevCam</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
   :root{
     --gap:#d5dae0; --panel:#ffffff; --panel2:#f6f7f9; --line:#e1e5ea;
@@ -74,7 +74,7 @@
   /* video */
   .video{grid-area:video}
   .feed{position:relative;flex:1;min-height:0;background:#0b0d10;overflow:hidden}
-  .feed img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .feed #frame{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
   .video.firing .feed::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 0 3px var(--red);
     animation:calm 2.2s ease-in-out infinite;pointer-events:none}
   .boxes{position:absolute;inset:0;pointer-events:none}
@@ -112,9 +112,21 @@
   .pin.ping::before{animation:ping 1.1s ease-out}
   .pin.alert i{background:var(--red)} .pin.alert::before{border-color:var(--red);animation:ping 1.6s ease-out infinite}
   @keyframes ping{0%{transform:scale(.3);opacity:.9}100%{transform:scale(1.4);opacity:0}}
-  .leaflet-container{font-family:var(--sans)}
-  .leaflet-tile-pane{filter:grayscale(1) brightness(1.04) contrast(.92)}
-  .leaflet-control-attribution{font-size:9px!important}
+  .maplibregl-ctrl-attrib{font-size:9px}
+  .mapmsg{position:absolute;inset:0;display:grid;place-items:center;font:500 12px var(--mono);color:var(--faint)}
+
+  /* alarm band across the camera feed */
+  .feed{container-type:size}
+  .alarmband{position:absolute;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;justify-content:center;
+    gap:clamp(10px,3cqw,40px);padding:clamp(10px,2.4cqh,26px) 16px;background:rgba(205,66,70,.9);color:#fff;
+    border-bottom:3px solid #fff;box-shadow:0 8px 30px rgba(0,0,0,.35);
+    transform:translateY(-110%);transition:transform .35s cubic-bezier(.2,.9,.2,1.1);pointer-events:none}
+  .video.firing .alarmband{transform:none;animation:band 1.6s ease-in-out infinite}
+  .alarmband span{font:900 clamp(26px,6.4cqw,112px)/1 var(--sans);letter-spacing:.01em;text-transform:uppercase;text-align:center;
+    text-shadow:0 2px 0 rgba(0,0,0,.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .alarmband img{height:clamp(40px,9cqw,150px);width:auto;flex:none}
+  .alarmband img.flip{transform:scaleX(-1)}
+  @keyframes band{0%,100%{background:rgba(205,66,70,.92)}50%{background:rgba(150,24,30,.92)}}
 
   /* timeline */
   .timeline{grid-area:timeline}
@@ -218,6 +230,9 @@
     <div class="feed" id="feed">
       <img id="frame" src="/stream.mjpg" alt="Live camera">
       <div class="boxes" id="boxes"></div>
+      <div class="alarmband" aria-live="assertive">
+        <img src="/static/siren.gif" alt=""><span id="bandText">ALERT</span><img class="flip" src="/static/siren.gif" alt="">
+      </div>
       <div class="corners"></div>
       <div class="vtag tl"><i></i>LIVE · NoIR</div>
       <div class="vtag bl" id="vtagBL"></div>
@@ -288,7 +303,7 @@
 
 <audio id="alertAudio" preload="auto"></audio>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -382,22 +397,61 @@ function speak(text){
 }
 
 // ---------------------------------------------------------------- map (real-time location)
-const map = L.map("map", {zoomControl: false}).setView([25.77, -80.19], 4);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  {maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"}).addTo(map);
-L.control.zoom({position: "bottomright"}).addTo(map);
-const pinIcon = L.divIcon({className: "", html: '<div class="pin" id="pin"><i></i></div>', iconSize: [16, 16], iconAnchor: [8, 8]});
-let pin = null, accCircle = null, locSource = null, locCity = "";
-new ResizeObserver(() => map.invalidateSize()).observe($("#map"));
+// 3D: MapLibre GL + OpenFreeMap vector tiles, with buildings extruded to their real heights
+let map = null, mapReady = false, pendingLoc = null, pin = null, locSource = null, locCity = "";
+const pinEl = document.createElement("div"); pinEl.className = "pin"; pinEl.id = "pin"; pinEl.innerHTML = "<i></i>";
+function circle(lon, lat, r){
+  const pts = [], dLat = r / 111320, dLon = r / (111320 * Math.cos(lat * Math.PI / 180));
+  for(let i = 0; i <= 64; i++){ const a = i / 64 * 2 * Math.PI; pts.push([lon + dLon * Math.cos(a), lat + dLat * Math.sin(a)]); }
+  return {type: "Feature", geometry: {type: "Polygon", coordinates: [pts]}};
+}
+try{
+  map = new maplibregl.Map({container: "map", style: "https://tiles.openfreemap.org/styles/positron",
+    center: [-80.19, 25.77], zoom: 3, pitch: 0, attributionControl: {compact: true}});
+  map.addControl(new maplibregl.NavigationControl({visualizePitch: true}), "bottom-right");
+  map.on("load", () => {
+    if(map.getLayer("building")) map.setLayoutProperty("building", "visibility", "none");
+    const firstLabel = (map.getStyle().layers.find(l => l.type === "symbol") || {}).id;
+    map.addLayer({id: "building-3d", type: "fill-extrusion", source: "openmaptiles", "source-layer": "building", minzoom: 13,
+      paint: {
+        "fill-extrusion-color": ["interpolate", ["linear"], ["coalesce", ["get", "render_height"], 0], 0, "#e4e8ed", 60, "#c9d2dd", 200, "#a3b3c7"],
+        "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+        "fill-extrusion-opacity": .92,
+      }}, firstLabel);
+    map.addSource("acc", {type: "geojson", data: {type: "FeatureCollection", features: []}});
+    map.addLayer({id: "acc-fill", type: "fill", source: "acc", paint: {"fill-color": "#2d72d2", "fill-opacity": .07}});
+    map.addLayer({id: "acc-line", type: "line", source: "acc", paint: {"line-color": "#2d72d2", "line-width": 1.4, "line-opacity": .75}});
+    mapReady = true;
+    if(pendingLoc) setLoc(...pendingLoc);
+  });
+  new ResizeObserver(() => map.resize()).observe($("#map"));
+}catch(e){
+  $("#map").innerHTML = '<div class="mapmsg">3D map needs WebGL, which this browser has turned off</div>';
+}
+
+// slow orbit around the camera; pauses while someone drags or zooms the map
+let orbit = false, idleTimer = null;
+function spin(){ if(!orbit || !map) return; map.rotateTo((map.getBearing() + 90) % 360, {duration: 40000, easing: t => t}); }
+function startOrbit(){ orbit = true; spin(); }
+if(map){
+  map.on("moveend", () => { if(orbit && !map.isMoving()) spin(); });
+  ["mousedown", "touchstart", "wheel"].forEach(ev => map.getCanvasContainer().addEventListener(ev, () => {
+    orbit = false; map.stop(); clearTimeout(idleTimer); idleTimer = setTimeout(startOrbit, 15000);
+  }, {passive: true}));
+}
 
 function setLoc(lat, lon, acc, source){
-  const ll = [lat, lon], first = !pin;
+  if(!map) return;
+  if(!mapReady){ pendingLoc = [lat, lon, acc, source]; return; }
+  const first = !pin;
   locSource = source;
   if(first){
-    pin = L.marker(ll, {icon: pinIcon}).addTo(map);
-    accCircle = L.circle(ll, {radius: acc, color: "#2d72d2", weight: 1, fillOpacity: .07}).addTo(map);
-    map.setView(ll, acc > 2000 ? 12 : 17);
-  }else{ pin.setLatLng(ll); accCircle.setLatLng(ll).setRadius(acc); }
+    pin = new maplibregl.Marker({element: pinEl}).setLngLat([lon, lat]).addTo(map);
+    map.flyTo({center: [lon, lat], zoom: acc > 2000 ? 15 : 17, pitch: 62, bearing: -25, duration: 4000});
+    map.once("moveend", startOrbit);
+  }else pin.setLngLat([lon, lat]);
+  map.getSource("acc").setData(circle(lon, lat, acc));
   $("#locSrc").textContent = source === "browser" ? "browser location · live" : "approximate · from IP address";
   $("#mapRead").innerHTML = `<b>${lat.toFixed(5)}, ${lon.toFixed(5)}</b><br>&plusmn; ${acc >= 1000 ? (acc / 1000).toFixed(1) + " km" : Math.round(acc) + " m"}`
     + (locCity ? ` &middot; ${esc(locCity)}` : "") + `<br>updated ${hms(Date.now())}`;
@@ -457,6 +511,7 @@ function updateAlarm(al, cfg){
   bar.classList.toggle("firing", active);
   bar.classList.toggle("off", al.enabled === false);
   $("#pvideo").classList.toggle("firing", active);
+  $("#bandText").textContent = phrase;
   $("#abText").textContent = active ? `⚠ ${phrase}` + (muted ? " · muted" : "")
     : al.enabled === false ? "Alarm disarmed"
     : `Armed · ${phrase} · watching for ${al.target || cfg.alert_target || "—"}`;
