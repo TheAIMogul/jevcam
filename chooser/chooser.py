@@ -18,6 +18,8 @@ PORT = int(os.environ.get("PORT", "8080"))
 with open(os.path.join(HERE, "apps.json")) as f:
     APPS = json.load(f)
 POOL = ThreadPoolExecutor(max_workers=max(2, len(APPS)))
+ASSET_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+               ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
 
 
 def probe(app):
@@ -49,6 +51,14 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 return self._send(200, "text/html; charset=utf-8", f.read())
+        if path.startswith("/assets/"):
+            name = os.path.basename(path)                  # no sub-paths, no ..
+            ctype = ASSET_TYPES.get(os.path.splitext(name)[1].lower())
+            file = os.path.join(HERE, "assets", name)
+            if not ctype or not os.path.isfile(file):
+                return self._send(404, "text/plain", b"not found")
+            with open(file, "rb") as f:
+                return self._send(200, ctype, f.read(), cache="max-age=86400")
         if path == "/api/apps":
             return self._json(APPS)
         if path == "/api/status":

@@ -5,68 +5,123 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pi-07 Apps</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Mr+Dafoe&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#f4f5f7; --panel:#ffffff; --ink:#14171c; --muted:#5d6675; --line:#e2e5ea;
-    --ok:#15935b; --down:#c2410c;
-    --shadow:0 1px 3px rgba(20,24,29,.06),0 12px 32px rgba(20,24,29,.08);
+    --ink:#1b1230; --muted:#5d5470; --pink:#ff3d8b; --teal:#16d3d0; --orange:#ff8a3d; --violet:#6b3cff;
+    --ok:#12a26b; --down:#d4472c;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:var(--bg);color:var(--ink);
-    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans",sans-serif;
-    -webkit-font-smoothing:antialiased}
+  html,body{margin:0;height:100%;overflow:hidden;background:#2b1550}
+  body{color:#fff;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 
-  .chooser{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto;
-    padding:clamp(20px,4vh,48px) clamp(16px,5vw,72px);gap:clamp(18px,3vh,36px)}
-  header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  header h1{font-size:clamp(28px,4vw,48px);font-weight:800;letter-spacing:-.03em;margin:0}
-  header p{margin:6px 0 0;color:var(--muted);font-size:clamp(14px,1.4vw,18px)}
-  .clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:clamp(18px,2vw,28px);color:var(--muted)}
+  /* ---------------- the Miami scene (parallax layers, back to front) ---------------- */
+  .scene{position:fixed;inset:0;overflow:hidden;z-index:0}
+  .layer{position:absolute;will-change:transform}
+  .sky{inset:-6%;background:url(/assets/sky.jpg) center 70%/cover no-repeat;animation:skypan 90s ease-in-out infinite alternate}
+  @keyframes skypan{to{background-position:60% 74%}}
+  .sun{left:50%;top:58%;width:46vmax;height:46vmax;margin:-23vmax 0 0 -23vmax;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,214,140,.55) 0%,rgba(255,140,90,.25) 30%,rgba(255,80,140,0) 62%);
+    animation:breathe 7s ease-in-out infinite;mix-blend-mode:screen}
+  @keyframes breathe{50%{transform:scale(1.08);opacity:.75}}
+  .skyline{left:-10%;right:-10%;bottom:24vh;height:30vh;background:url(/assets/skyline.webp) 0 100%/auto 100% repeat-x;
+    animation:slide 240s linear infinite}
+  .water{left:-10%;right:-10%;bottom:-2vh;height:27vh;background:url(/assets/water.jpg) 0 0/auto 100% repeat-x;
+    animation:slide 70s linear infinite}
+  .water::after{content:"";position:absolute;inset:0;mix-blend-mode:screen;opacity:.55;
+    background:repeating-linear-gradient(100deg,rgba(255,255,255,0) 0 38px,rgba(255,230,240,.22) 40px,rgba(255,255,255,0) 44px 90px);
+    background-size:400px 100%;animation:shimmer 6s linear infinite}
+  @keyframes slide{to{background-position-x:-2860px}}
+  @keyframes shimmer{to{background-position-x:400px}}
+  .haze{inset:0;background:linear-gradient(180deg,rgba(28,10,60,.55) 0%,rgba(28,10,60,0) 32%,rgba(28,10,60,0) 70%,rgba(28,10,60,.45) 100%)}
 
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));
-    gap:clamp(16px,2.5vw,36px);align-content:center}
-  .card{--accent:#2563eb;position:relative;background:var(--panel);border:2px solid var(--line);border-radius:22px;
-    box-shadow:var(--shadow);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;
-    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
-    text-align:left;padding:0;font:inherit;color:inherit}
-  .card:hover{transform:translateY(-3px)}
-  .card.sel{border-color:var(--accent);transform:translateY(-4px);
-    box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 22%,transparent),var(--shadow)}
+  .birds{inset:0;pointer-events:none}
+  .bird{position:absolute;left:0;top:0;width:var(--s);height:var(--s);animation:fly var(--d) linear forwards}
+  .bird i{display:block;width:100%;height:100%;background:url(/assets/bird.webp) 0 0/200% 100% no-repeat;
+    animation:flap var(--f) steps(1) infinite,bob 2.4s ease-in-out infinite}
+  .bird.rtl i{transform:scaleX(-1)}
+  @keyframes flap{50%{background-position:100% 0}}
+  @keyframes bob{50%{translate:0 calc(var(--s) * .35)}}
+  @keyframes fly{from{transform:translate(var(--x0),var(--y))}to{transform:translate(var(--x1),calc(var(--y) - 6vh))}}
+
+  .palms{inset:0;pointer-events:none}
+  .palm{position:absolute;bottom:-3vh;transform-origin:50% 100%;animation:sway var(--d) ease-in-out infinite alternate;
+    filter:drop-shadow(0 0 18px rgba(255,61,139,.25))}
+  .palm.p1{left:-2vw;height:92vh;--a:-2.2deg;--b:1.6deg;--d:5.5s}
+  .palm.p2{right:-1vw;height:84vh;--a:1.8deg;--b:-2.4deg;--d:6.8s}
+  .palm.p3{left:22vw;height:46vh;opacity:.85;--a:-1.5deg;--b:1.5deg;--d:4.6s}
+  @keyframes sway{from{rotate:var(--a)}to{rotate:var(--b)}}
+
+  /* entrance: the scene assembles itself */
+  .scene .skyline{animation:slide 240s linear infinite, rise 1.4s cubic-bezier(.2,.8,.2,1) both}
+  .scene .water{animation:slide 70s linear infinite, rise 1.2s .1s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes rise{from{translate:0 18vh;opacity:0}}
+  .palm.p1{animation:sway var(--d) ease-in-out infinite alternate, inl 1.3s .25s cubic-bezier(.2,.8,.2,1) both}
+  .palm.p2{animation:sway var(--d) ease-in-out infinite alternate, inr 1.3s .35s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes inl{from{translate:-30vw 0}} @keyframes inr{from{translate:30vw 0}}
+
+  /* ---------------- the chooser UI ---------------- */
+  .chooser{position:relative;z-index:2;height:100vh;display:grid;grid-template-rows:auto 1fr auto;
+    padding:clamp(18px,4vh,46px) clamp(16px,6vw,96px);gap:clamp(14px,2.6vh,30px)}
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;animation:fadeup .9s .2s both}
+  .brand .script{font:400 clamp(44px,6.4vw,92px)/.8 "Mr Dafoe",cursive;color:#fff;
+    text-shadow:0 0 6px rgba(255,61,139,.9),0 0 22px rgba(255,61,139,.7),0 0 44px rgba(255,61,139,.45);
+    display:inline-block;transform:rotate(-6deg);margin:0 0 6px 4px}
+  header h1{margin:0;font:900 clamp(28px,4.2vw,58px)/1 Inter,sans-serif;letter-spacing:-.03em;
+    text-shadow:0 2px 0 rgba(43,21,80,.35),0 0 30px rgba(22,211,208,.35)}
+  header p{margin:10px 0 0;font:600 clamp(13px,1.3vw,17px) Inter,sans-serif;color:rgba(255,255,255,.88);letter-spacing:.02em;
+    text-shadow:0 1px 6px rgba(43,21,80,.6)}
+  .clock{font:800 clamp(22px,2.6vw,38px) Inter,sans-serif;font-variant-numeric:tabular-nums;color:#fff;
+    text-shadow:0 0 8px rgba(22,211,208,.95),0 0 26px rgba(22,211,208,.6)}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:clamp(16px,2.6vw,40px);
+    align-content:center;max-width:1300px;width:100%;margin:0 auto}
+  .card{--accent:#6b3cff;--g1:#6b3cff;--g2:#16d3d0;position:relative;background:rgba(255,255,255,.93);color:var(--ink);
+    border:0;border-radius:24px;padding:0;overflow:hidden;cursor:pointer;text-align:left;font:inherit;
+    box-shadow:0 20px 50px rgba(43,10,70,.45);display:flex;flex-direction:column;
+    transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s;animation:cardin .9s cubic-bezier(.2,.8,.2,1) both}
+  .card:nth-child(1){animation-delay:.45s} .card:nth-child(2){animation-delay:.6s}
+  @keyframes cardin{from{opacity:0;transform:translateY(40px) scale(.96)}}
+  .card:hover{transform:translateY(-4px)}
+  .card.sel{transform:translateY(-8px) scale(1.015);
+    box-shadow:0 0 0 3px #fff,0 0 0 7px var(--accent),0 0 46px 6px color-mix(in srgb,var(--accent) 70%,transparent),0 26px 60px rgba(43,10,70,.5)}
   .card:focus-visible{outline:none}
-  .card.down .prev .ph{filter:grayscale(1);opacity:.5}
-
-  .prev{position:relative;aspect-ratio:16/9;background:#0b0d11;overflow:hidden}
-  .prev .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(56px,8vw,110px);
-    background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--accent) 35%,#0b0d11),#0b0d11 70%)}
-  .num{position:absolute;top:16px;left:16px;width:54px;height:54px;border-radius:15px;background:var(--accent);
-    color:#fff;display:grid;place-items:center;font-weight:800;font-size:27px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
-  .status{position:absolute;top:18px;right:16px;display:flex;align-items:center;gap:8px;padding:7px 13px;
-    border-radius:999px;font-size:13px;font-weight:700;background:rgba(255,255,255,.94);color:var(--muted)}
+  .card.down .art .ic{filter:grayscale(1);opacity:.55}
+  .art{position:relative;height:clamp(120px,24vh,250px);background:linear-gradient(135deg,var(--g1),var(--g2));overflow:hidden}
+  .art::before{content:"";position:absolute;left:50%;bottom:-45%;width:85%;aspect-ratio:1;translate:-50% 0;border-radius:50%;
+    background:repeating-linear-gradient(180deg,rgba(255,255,255,.35) 0 9px,rgba(255,255,255,0) 9px 18px);
+    mask:linear-gradient(180deg,#000 0%,#000 55%,transparent 56%);opacity:.55}
+  .art .ic{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(56px,8vh,96px);
+    filter:drop-shadow(0 10px 18px rgba(40,10,60,.35));animation:float 4s ease-in-out infinite}
+  @keyframes float{50%{translate:0 -8px}}
+  .num{position:absolute;top:16px;left:16px;width:52px;height:52px;border-radius:16px;background:#fff;color:var(--accent);
+    display:grid;place-items:center;font:900 26px Inter,sans-serif;box-shadow:0 6px 18px rgba(40,10,60,.25)}
+  .status{position:absolute;top:18px;right:16px;display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;
+    font:800 13px Inter,sans-serif;background:rgba(255,255,255,.95);color:var(--muted)}
   .status i{width:9px;height:9px;border-radius:50%;background:currentColor}
   .status.up{color:var(--ok)} .status.down{color:var(--down)}
+  .body{padding:clamp(16px,2.2vw,26px);display:grid;gap:7px;flex:1}
+  .name{font:900 clamp(24px,2.6vw,34px)/1.05 Inter,sans-serif;letter-spacing:-.025em}
+  .tag{font:800 clamp(13px,1.2vw,16px) Inter,sans-serif;color:var(--accent);letter-spacing:.01em}
+  .desc{color:var(--muted);font-size:clamp(13.5px,1.15vw,15.5px);line-height:1.5}
+  .meta{display:flex;gap:8px;flex-wrap:wrap}
+  .meta span{font-size:12.5px;color:var(--muted);background:#f3eff8;border-radius:8px;padding:5px 9px}
+  .go{margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .go .btn{display:inline-flex;align-items:center;gap:10px;background:#f1edf7;color:var(--ink);font:800 16px Inter,sans-serif;
+    padding:12px 20px;border-radius:14px;transition:background .2s,color .2s}
+  .card.sel .go .btn{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 45%,transparent)}
+  .go .port{font:700 13px ui-monospace,"SF Mono",Menlo,monospace;color:var(--muted)}
 
-  .body{padding:clamp(18px,2.2vw,28px);display:grid;gap:8px;flex:1}
-  .name{font-size:clamp(24px,2.6vw,34px);font-weight:800;letter-spacing:-.02em}
-  .tag{font-size:clamp(14px,1.3vw,17px);font-weight:700;color:var(--accent)}
-  .desc{color:var(--muted);font-size:clamp(14px,1.2vw,16px);line-height:1.5}
-  .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
-  .meta span{font-size:13px;color:var(--muted);background:#f1f3f6;border-radius:8px;padding:5px 9px}
-  .meta b{color:var(--ink);font-weight:700}
-  .go{margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-  .go .btn{display:inline-flex;align-items:center;gap:10px;background:#eef0f3;color:var(--ink);
-    font-weight:700;font-size:16px;padding:12px 20px;border-radius:12px;transition:background .18s,color .18s}
-  .card.sel .go .btn{background:var(--accent);color:#fff}
-  .go .port{font:600 13px ui-monospace,"SF Mono",Menlo,monospace;color:var(--muted)}
+  footer{display:flex;justify-content:center;animation:fadeup .9s .8s both}
+  .keys{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;padding:9px 18px;border-radius:999px;
+    background:rgba(28,10,60,.5);font:600 14px Inter,sans-serif;color:rgba(255,255,255,.92)}
+  kbd{font:700 12px ui-monospace,"SF Mono",Menlo,monospace;background:#fff;color:var(--ink);border-radius:6px;padding:2px 7px;
+    box-shadow:0 2px 0 rgba(0,0,0,.25)}
+  @keyframes fadeup{from{opacity:0;transform:translateY(16px)}}
 
-  footer{display:flex;justify-content:center;gap:22px;color:var(--muted);font-size:14px;flex-wrap:wrap}
-  kbd{font:600 12px ui-monospace,"SF Mono",Menlo,monospace;background:#fff;border:1px solid var(--line);
-    border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--ink)}
-
-  .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,160%);background:var(--ink);color:#fff;
-    padding:13px 20px;border-radius:12px;font-weight:600;font-size:15px;box-shadow:var(--shadow);
-    transition:transform .3s cubic-bezier(.2,.9,.2,1.1);max-width:calc(100vw - 32px);text-align:center;z-index:30}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,160%);background:#fff;color:var(--ink);z-index:30;
+    padding:13px 20px;border-radius:14px;font:700 15px Inter,sans-serif;box-shadow:0 14px 40px rgba(43,10,70,.45);
+    transition:transform .3s cubic-bezier(.2,.9,.2,1.1);max-width:calc(100vw - 32px);text-align:center}
   .toast:not(.show){visibility:hidden;transition:transform .3s,visibility 0s .3s}
   .toast.show{transform:translate(-50%,0)}
 
@@ -74,19 +129,36 @@
   .shell{position:fixed;inset:0;background:#000;display:none;z-index:10}
   .shell.on{display:block}
   .shell iframe{width:100%;height:100%;border:0;display:block;background:#fff}
-  .back{position:fixed;left:14px;bottom:14px;z-index:20;display:none;align-items:center;gap:8px;
-    padding:10px 16px;border-radius:999px;border:0;background:rgba(20,23,28,.75);color:#fff;
-    font:700 14px Inter,system-ui,sans-serif;cursor:pointer;backdrop-filter:blur(6px);opacity:.6;transition:opacity .2s}
+  .back{position:fixed;left:14px;bottom:14px;z-index:20;display:none;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;
+    border:0;background:linear-gradient(135deg,var(--pink),var(--violet));color:#fff;font:800 14px Inter,sans-serif;cursor:pointer;
+    opacity:.75;transition:opacity .2s;box-shadow:0 6px 18px rgba(43,10,70,.4)}
   .back:hover,.back:focus-visible{opacity:1}
   .shell.on ~ .back{display:inline-flex}
+  body.app-open .scene, body.app-open .scene *{animation-play-state:paused!important}
 
-  @media(prefers-reduced-motion:reduce){.card,.toast{transition:none}}
+  @media(prefers-reduced-motion:reduce){.scene *,.card,.art .ic,header,footer{animation:none!important}.birds{display:none}}
+  @media(max-width:760px){.palm.p3{display:none}.palm.p1{height:70vh}.palm.p2{height:62vh}html,body{overflow:auto}.chooser{height:auto;min-height:100vh}}
 </style>
 </head>
 <body>
+<div class="scene" id="scene" aria-hidden="true">
+  <div class="layer sky" data-depth="0.015"></div>
+  <div class="layer sun" data-depth="0.03"></div>
+  <div class="layer skyline" data-depth="0.05"></div>
+  <div class="layer birds" id="birds" data-depth="0.07"></div>
+  <div class="layer water" data-depth="0.09"></div>
+  <div class="layer haze"></div>
+  <div class="layer palms" data-depth="0.16">
+    <img class="palm p3" src="/assets/palm2.webp" alt="">
+    <img class="palm p1" src="/assets/palm1.webp" alt="">
+    <img class="palm p2" src="/assets/palm2.webp" alt="" style="scale:-1 1">
+  </div>
+</div>
+
 <main class="chooser" id="chooser">
   <header>
-    <div>
+    <div class="brand">
+      <span class="script">Miami</span>
       <h1>Choose an app</h1>
       <p>pi-07 &middot; IR camera &middot; powered by TypeSafe Jev</p>
     </div>
@@ -94,9 +166,11 @@
   </header>
   <section class="cards" id="cards" aria-label="Apps"></section>
   <footer>
-    <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> choose</span>
-    <span><kbd>Enter</kbd> open</span>
-    <span><kbd>1</kbd> <kbd>2</kbd> open directly</span>
+    <div class="keys">
+      <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> choose</span>
+      <span><kbd>Enter</kbd> open</span>
+      <span><kbd>1</kbd> <kbd>2</kbd> open directly</span>
+    </div>
   </footer>
 </main>
 
@@ -108,15 +182,20 @@
 const $ = s => document.querySelector(s);
 let apps = [], sel = 0, status = {}, openId = null;
 try{ sel = parseInt(localStorage.getItem("chooser_sel")) || 0; }catch(e){}
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const appUrl = a => `${location.protocol}//${location.hostname}:${a.port}/`;
+// Miami card colours per app (sunset gradients)
+const PALETTE = [["#6b3cff", "#16d3d0", "#5b2ee6"], ["#ff3d8b", "#ff8a3d", "#e8306f"], ["#16d3d0", "#6b3cff", "#0fb3b0"]];
 
 function render(){
-  $("#cards").innerHTML = apps.map((a, i) => `
-    <button class="card" id="card-${a.id}" data-i="${i}" style="--accent:${a.accent}" aria-label="Open ${esc(a.name)}">
-      <div class="prev">
-        <div class="ph">${a.icon || ""}</div>
+  $("#cards").innerHTML = apps.map((a, i) => {
+    const [g1, g2, accent] = PALETTE[i % PALETTE.length];
+    return `
+    <button class="card" id="card-${a.id}" data-i="${i}" style="--g1:${g1};--g2:${g2};--accent:${accent}" aria-label="Open ${esc(a.name)}">
+      <div class="art">
+        <div class="ic">${a.icon || ""}</div>
         <span class="num">${i + 1}</span>
         <span class="status" id="st-${a.id}"><i></i><span>checking&hellip;</span></span>
       </div>
@@ -127,7 +206,8 @@ function render(){
         <div class="meta" id="meta-${a.id}"></div>
         <div class="go"><span class="btn">Open App ${i + 1} &rarr;</span><span class="port">:${a.port}</span></div>
       </div>
-    </button>`).join("");
+    </button>`;
+  }).join("");
   document.querySelectorAll(".card").forEach(c => {
     c.addEventListener("click", () => launch(+c.dataset.i));
     c.addEventListener("mouseenter", () => select(+c.dataset.i));
@@ -146,8 +226,8 @@ async function refresh(){
     const list = await (await fetch("/api/status", {cache: "no-store"})).json();
     for(const s of list){
       status[s.id] = s;
-      const a = apps.find(x => x.id === s.id); if(!a) continue;
       const st = $("#st-" + s.id), card = $("#card-" + s.id);
+      if(!st) continue;
       st.className = "status " + (s.up ? "up" : "down");
       st.querySelector("span").textContent = s.up ? "Running" : "Offline";
       card.classList.toggle("down", !s.up);
@@ -169,6 +249,7 @@ function launch(i, fromHistory){
     return;
   }
   openId = a.id;
+  document.body.classList.add("app-open");      // pause the scene while an app runs
   $("#frame").src = appUrl(a);
   $("#shell").classList.add("on");
   document.title = `${a.name} · pi-07`;
@@ -179,6 +260,7 @@ function launch(i, fromHistory){
 function closeApp(fromHistory){
   if(!openId) return;
   openId = null;
+  document.body.classList.remove("app-open");
   $("#shell").classList.remove("on");
   $("#frame").src = "about:blank";          // stops the app's video stream
   document.title = "pi-07 Apps";
@@ -202,6 +284,41 @@ document.addEventListener("keydown", e => {
 function tick(){
   $("#clock").textContent = new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
 }
+
+// ---------------- parallax: layers follow the pointer, and drift on their own when idle ----------------
+const layers = [...document.querySelectorAll("[data-depth]")].map(el => ({el, d: +el.dataset.depth}));
+let tx = 0, ty = 0, cx = 0, cy = 0, lastMove = 0;
+addEventListener("pointermove", e => {
+  tx = (e.clientX / innerWidth - .5) * 2; ty = (e.clientY / innerHeight - .5) * 2; lastMove = performance.now();
+}, {passive: true});
+function frame(t){
+  if(!openId && !document.hidden){
+    if(t - lastMove > 4000){ tx = Math.sin(t / 5200) * .7; ty = Math.sin(t / 7300) * .35; }   // idle drift (kiosk)
+    cx += (tx - cx) * .045; cy += (ty - cy) * .045;
+    for(const {el, d} of layers) el.style.transform = `translate3d(${(-cx * d * innerWidth).toFixed(1)}px,${(-cy * d * innerHeight * .5).toFixed(1)}px,0)`;
+  }
+  requestAnimationFrame(frame);
+}
+if(!reduced) requestAnimationFrame(frame);
+
+// ---------------- birds: small flocks crossing the sky ----------------
+function spawnFlock(){
+  if(openId || document.hidden || reduced) return;
+  const rtl = Math.random() < .5, n = 1 + Math.floor(Math.random() * 3);
+  const y = 6 + Math.random() * 30, dur = 16 + Math.random() * 12, size = 22 + Math.random() * 30;
+  for(let k = 0; k < n; k++){
+    const b = document.createElement("div");
+    b.className = "bird" + (rtl ? " rtl" : "");
+    const s = size * (0.75 + Math.random() * .4);
+    b.style.cssText = `--s:${s.toFixed(0)}px;--d:${(dur + k * .6).toFixed(1)}s;--f:${(.42 + Math.random() * .2).toFixed(2)}s;` +
+      `--y:${(y + k * 3 + Math.random() * 2).toFixed(1)}vh;--x0:${rtl ? "110vw" : `calc(-10vw - ${k * 46}px)`};--x1:${rtl ? `calc(-12vw - ${k * 46}px)` : "112vw"};` +
+      `animation-delay:${(k * .35).toFixed(2)}s;opacity:${(.7 + s / 160).toFixed(2)}`;
+    b.innerHTML = "<i></i>";
+    b.addEventListener("animationend", ev => { if(ev.animationName === "fly") b.remove(); });
+    $("#birds").append(b);
+  }
+}
+if(!reduced){ setTimeout(spawnFlock, 1200); setInterval(() => { if(Math.random() < .7) spawnFlock(); }, 5200); }
 
 (async function init(){
   tick(); setInterval(tick, 10000);
