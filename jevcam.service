@@ -1,0 +1,15 @@
+[Unit]
+Description=JevCam live object detection
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hacker7
+WorkingDirectory=/home/hacker7/jevcam
+ExecStart=/home/hacker7/jevcam/.venv/bin/python /home/hacker7/jevcam/app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

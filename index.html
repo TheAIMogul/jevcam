@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JevCam</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --ink:#15181d; --muted:#5b6472;
+    --line:#e3e6ea; --accent:#2563eb; --accent-ink:#ffffff;
+    --ok:#15935b; --okbg:#e7f6ee; --no:#9aa3b0; --nobg:#f0f2f5;
+    --shadow:0 1px 3px rgba(20,24,29,.08),0 8px 24px rgba(20,24,29,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45}
+  header{display:flex;align-items:center;gap:12px;padding:16px 20px;
+    background:var(--panel);border-bottom:1px solid var(--line)}
+  header .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);
+    box-shadow:0 0 0 4px var(--okbg)}
+  header h1{font-size:18px;margin:0;font-weight:650;letter-spacing:-.01em}
+  header .meta{margin-left:auto;font-size:13px;color:var(--muted);text-align:right}
+  .wrap{max-width:1280px;margin:0 auto;padding:20px;display:grid;
+    grid-template-columns:minmax(0,1fr) 360px;gap:20px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);overflow:hidden}
+  .feed{position:relative;background:#000;aspect-ratio:1568/882}
+  .feed img{width:100%;height:100%;object-fit:contain;display:block}
+  .feed .badge{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.6);
+    color:#fff;font-size:12px;padding:5px 9px;border-radius:8px}
+  .sect{padding:16px}
+  .sect h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--muted);margin:0 0 10px}
+  .sect+.sect{border-top:1px solid var(--line)}
+  label.lbl{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+  textarea{width:100%;min-height:96px;resize:vertical;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;color:var(--ink);
+    background:#fbfcfd}
+  textarea:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .row{display:flex;gap:10px;align-items:center;margin-top:12px}
+  input[type=number]{width:72px;border:1px solid var(--line);border-radius:8px;
+    padding:8px;font:inherit}
+  button{border:0;border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;
+    font-size:14px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+  button.ghost{background:var(--nobg);color:var(--ink)}
+  button:active{transform:translateY(1px)}
+  .det{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+  .det:last-child{border-bottom:0}
+  .swatch{width:12px;height:12px;border-radius:3px;flex:none}
+  .det .name{font-size:14px;font-weight:550;flex:none;min-width:92px}
+  .bar{flex:1;height:8px;background:var(--nobg);border-radius:6px;overflow:hidden}
+  .bar>span{display:block;height:100%;background:var(--accent)}
+  .pct{font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted);min-width:40px;text-align:right}
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .tag.yes{background:var(--okbg);color:var(--ok)}
+  .tag.no{background:var(--nobg);color:var(--no)}
+  .err{background:#fdecec;color:#b42318;font-size:13px;padding:10px 12px;border-radius:10px;margin-top:10px}
+  .foot{font-size:12px;color:var(--muted);text-align:center;padding:14px}
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="statusdot"></span>
+  <h1>JevCam &middot; live object detection</h1>
+  <div class="meta" id="meta">connecting&hellip;</div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <div class="feed">
+      <img id="frame" alt="camera feed">
+      <span class="badge" id="fbadge">&nbsp;</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="sect">
+        <h2>What should it look for?</h2>
+        <label class="lbl" for="targets">One object per line, in plain English (max 8)</label>
+        <textarea id="targets" spellcheck="false" placeholder="person&#10;cell phone&#10;hard hat&#10;unattended bag"></textarea>
+        <div class="hint">e.g. &ldquo;a person wearing a mask&rdquo;, &ldquo;a delivery package&rdquo;, &ldquo;a dog&rdquo;.</div>
+        <div class="row">
+          <label class="lbl" style="margin:0">Every</label>
+          <input type="number" id="interval" min="1" max="60" step="1" value="5">
+          <label class="lbl" style="margin:0">sec</label>
+          <button id="apply" style="margin-left:auto">Apply</button>
+          <button id="pause" class="ghost">Pause</button>
+        </div>
+        <div id="err"></div>
+      </div>
+      <div class="sect">
+        <h2>Detections</h2>
+        <div id="dets"><div class="hint">waiting for first frame&hellip;</div></div>
+      </div>
+    </div>
+    <div class="foot">Powered by TypeSafe Jev &middot; Raspberry Pi + IR camera</div>
+  </div>
+</div>
+
+<script>
+let paused = false;
+const $ = s => document.querySelector(s);
+
+async function pushConfig(extra={}){
+  const targets = $("#targets").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,8);
+  const interval = parseFloat($("#interval").value)||5;
+  const body = Object.assign({targets, interval}, extra);
+  const r = await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  return r.json();
+}
+$("#apply").onclick = ()=>pushConfig();
+$("#pause").onclick = async ()=>{
+  paused = !paused;
+  await pushConfig({running: !paused});
+  $("#pause").textContent = paused ? "Resume" : "Pause";
+};
+
+let targetsFocused = false;
+$("#targets").addEventListener("focus",()=>targetsFocused=true);
+$("#targets").addEventListener("blur",()=>targetsFocused=false);
+
+function refreshImg(){
+  $("#frame").src = "/latest.jpg?t=" + Date.now();
+}
+
+async function poll(){
+  try{
+    const r = await fetch("/api/state"); const s = await r.json();
+    const cfg = s.config||{};
+    if(!targetsFocused && document.activeElement!==$("#targets"))
+      if($("#targets").value.trim()==="") $("#targets").value=(cfg.targets||[]).join("\n");
+    if(document.activeElement!==$("#interval")) $("#interval").value = cfg.interval||5;
+    $("#statusdot").style.background = cfg.running ? "var(--ok)" : "var(--no)";
+    $("#meta").innerHTML = (cfg.running?"running":"paused")
+      + " &middot; " + (s.latency_ms!=null? s.latency_ms+" ms":"&mdash;")
+      + " &middot; frame #" + (s.frames||0)
+      + (s.ts? " &middot; "+s.ts.split(" ")[1]:"");
+    const dets = s.detections||[];
+    $("#fbadge").textContent = dets.filter(d=>d.present).map(d=>d.label).join(" · ") || "no targets found";
+    const box = $("#dets");
+    if(!dets.length){ box.innerHTML='<div class="hint">no targets set &mdash; add some above.</div>'; }
+    else{
+      box.innerHTML = dets.map(d=>{
+        const pct = d.presence!=null? Math.round(d.presence*100):0;
+        const col = `rgb(${(d.color||[37,99,235]).join(",")})`;
+        return `<div class="det">
+          <span class="swatch" style="background:${col}"></span>
+          <span class="name">${esc(d.label)}</span>
+          <span class="bar"><span style="width:${pct}%;background:${col}"></span></span>
+          <span class="pct">${pct}%</span>
+          <span class="tag ${d.present?'yes':'no'}">${d.present?'YES':'no'}</span>
+        </div>`;
+      }).join("");
+    }
+    $("#err").innerHTML = s.error? `<div class="err">Jev error: ${esc(s.error)}</div>`:"";
+  }catch(e){ $("#meta").textContent="offline"; $("#statusdot").style.background="var(--no)"; }
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+setInterval(refreshImg, 1000);
+setInterval(poll, 1000);
+refreshImg(); poll();
+</script>
+</body>
+</html>
