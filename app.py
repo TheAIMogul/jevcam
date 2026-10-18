@@ -1,24 +1,26 @@
 #!/usr/bin/env python3
 """JevCam - live IR-camera object detection on a Raspberry Pi, powered by TypeSafe Jev.
 
-Captures frames from the Pi Camera on a fixed interval, sends each frame to Jev
-with a user-defined, natural-language list of target objects, and serves a live
-web UI that shows the annotated frame plus per-target presence probability.
+The camera streams continuously (MJPEG, ~20 fps) and is broadcast as-is to the
+web UI. A separate detection thread samples the newest frame on a fixed interval
+(default once per second), sends it to Jev with a user-defined, natural-language
+list of target objects, and publishes the results; the browser draws the boxes
+over the live video.
 
 The target list ("what it should see") is editable live from the web UI.
 """
 import base64
 import hashlib
-import io
 import json
 import os
+import subprocess
 import threading
 import time
+from collections import deque
 from datetime import datetime
 
 import requests
 from flask import Flask, Response, jsonify, request, send_file
-from PIL import Image, ImageDraw, ImageFont
 
 # ---------------------------------------------------------------------------
 # Config
@@ -26,8 +28,10 @@ from PIL import Image, ImageDraw, ImageFont
 TYPESAFE_KEY_FILE = os.path.expanduser("~/.config/typesafe/api-key")
 TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-preview"            # jev-1.14.0 - supports box questions
-MAX_SIDE = 1568                  # Jev image max per-side pixels
-CAP_SIZE = (1568, 882)          # capture size (within Jev limits, 16:9)
+STREAM_SIZE = (1280, 720)        # broadcast + sample size (within Jev's 1568 limit)
+STREAM_FPS = 20                  # broadcast frame rate
+STREAM_QUALITY = 70              # MJPEG quality
+STALL_SECS = 3.0                 # no frames this long -> restart the camera stream
 PRESENCE_DRAW_THRESHOLD = 0.5    # draw a box only if presence noul >= this
 BOX_CONF_FLOOR = 0.15            # and box confidence >= this
 
@@ -38,7 +42,7 @@ BOX_COLORS = [
 
 # Mutable runtime config, protected by CONFIG_LOCK
 config = {
-    "interval": 5.0,
+    "interval": 1.0,             # seconds between Jev samples
     "targets": ["person", "cell phone", "laptop"],
     "running": True,
     # Alarm: when alert_target is seen, the UI flashes red + speaks alert_phrase
@@ -56,13 +60,10 @@ state = {
     "error": None,
     "frames": 0,
     "jev_count": 0,        # successful Jev responses (drives the JEV light)
-    "frame_seq": 0,        # new annotated frames stored (drives the FRAME light)
+    "frame_seq": 0,        # frames sampled for Jev (drives the FRAME light)
     "alert": {"active": False, "presence": None, "phrase": "", "target": "", "enabled": True},
 }
 STATE_LOCK = threading.Lock()
-
-latest_jpeg = {"bytes": None}   # annotated JPEG bytes
-JPEG_LOCK = threading.Lock()
 
 
 def load_key():
@@ -126,41 +127,116 @@ def generate_tts(phrase):
 # ---------------------------------------------------------------------------
 # Camera
 # ---------------------------------------------------------------------------
-# A flaky ribbon cable can make the sensor drop out mid-run ("Camera frontend
-# has timed out"), which would block an in-process picamera2 capture forever and
-# freeze the loop. To stay resilient we capture via a short-lived rpicam-still
-# process with a hard timeout: a fresh pipeline each frame self-recovers the
-# instant the sensor comes back, and a stuck capture is killed, not hung.
-import subprocess  # noqa: E402
-
-CAP_PATH = "/tmp/jevcam_cap.jpg"
-CAP_TIMEOUT = 6           # seconds; kill a stuck capture (fast recovery on cable blips)
-RPICAM = "rpicam-still"
+# One long-lived rpicam-vid process streams MJPEG on stdout (hardware JPEG
+# encoder). A flaky ribbon cable can make the sensor drop out mid-run ("Camera
+# frontend has timed out"); a watchdog kills the process when frames stop, and
+# the reader loop respawns it, so the stream self-recovers instead of hanging.
 
 
-def capture_rgb():
-    """Capture a frame to disk via rpicam-still and return it as a PIL RGB image.
+class Camera:
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.frame = None          # latest JPEG bytes
+        self.seq = 0
+        self.last_t = 0.0
+        self.spawn_t = 0.0
+        self.proc = None
+        self.error = "starting camera"
+        self._times = deque(maxlen=120)
 
-    Raises RuntimeError on timeout/failure (loop treats it as a transient error
-    and retries next cycle) instead of blocking forever.
-    """
-    cmd = [
-        RPICAM, "--nopreview", "-n", "-t", "900",
-        "--hflip", "--vflip",                    # matches physical mount
-        "--width", str(CAP_SIZE[0]), "--height", str(CAP_SIZE[1]),
-        "-o", CAP_PATH,
-    ]
-    try:
-        subprocess.run(cmd, check=True, timeout=CAP_TIMEOUT,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("camera capture timed out - check the ribbon cable is "
-                           "fully seated (sensor not responding)")
-    except subprocess.CalledProcessError as e:
-        msg = (e.stderr or b"").decode(errors="replace")[-200:].strip()
-        raise RuntimeError(f"camera capture failed: {msg or 'rpicam-still error'}")
-    return Image.open(CAP_PATH).convert("RGB")
+    def start(self):
+        threading.Thread(target=self._run, daemon=True).start()
+        threading.Thread(target=self._watchdog, daemon=True).start()
 
+    def _cmd(self):
+        w, h = STREAM_SIZE
+        return [
+            "rpicam-vid", "-t", "0", "-n", "--codec", "mjpeg",
+            "--quality", str(STREAM_QUALITY), "--framerate", str(STREAM_FPS),
+            "--width", str(w), "--height", str(h),
+            "--hflip", "--vflip",                    # matches physical mount
+            "--flush", "-o", "-",
+        ]
+
+    def _run(self):
+        while True:
+            try:
+                self.spawn_t = time.time()
+                self.proc = subprocess.Popen(self._cmd(), stdout=subprocess.PIPE,
+                                             stderr=subprocess.DEVNULL, bufsize=0)
+                self._read(self.proc.stdout)
+            except Exception as e:  # noqa: BLE001
+                self.error = f"camera stream failed: {e}"
+            finally:
+                p = self.proc
+                if p and p.poll() is None:
+                    p.kill()
+                    p.wait()
+            if not self.error:
+                self.error = ("camera stream stopped - check the ribbon cable is "
+                              "fully seated (sensor not responding)")
+            time.sleep(1.0)
+
+    def _read(self, f):
+        buf = b""
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                return
+            buf += chunk
+            while True:
+                s = buf.find(b"\xff\xd8")
+                if s < 0:
+                    buf = buf[-1:]
+                    break
+                e = buf.find(b"\xff\xd9", s + 2)
+                if e < 0:
+                    buf = buf[s:]
+                    break
+                self._publish(buf[s:e + 2])
+                buf = buf[e + 2:]
+
+    def _publish(self, jpg):
+        now = time.time()
+        with self.cond:
+            self.frame = jpg
+            self.seq += 1
+            self.last_t = now
+            self.error = None
+            self._times.append(now)
+            self.cond.notify_all()
+
+    def _watchdog(self):
+        while True:
+            time.sleep(1.0)
+            p = self.proc
+            if not p or p.poll() is not None:
+                continue
+            # allow a few seconds for the pipeline to start before the first frame
+            ref = self.last_t if self.last_t > self.spawn_t else self.spawn_t + 5.0
+            if time.time() - ref > STALL_SECS:
+                self.error = ("camera stalled - restarting stream (check the ribbon "
+                              "cable is fully seated)")
+                p.kill()
+
+    def ok(self):
+        return self.frame is not None and time.time() - self.last_t < STALL_SECS
+
+    def fps(self):
+        now = time.time()
+        return round(sum(1 for t in list(self._times) if now - t <= 2.0) / 2.0, 1)
+
+    def latest(self):
+        with self.cond:
+            return self.seq, self.frame
+
+    def wait_frame(self, last_seq, timeout=2.0):
+        with self.cond:
+            self.cond.wait_for(lambda: self.seq != last_seq, timeout=timeout)
+            return self.seq, self.frame
+
+
+cam = Camera()
 
 # ---------------------------------------------------------------------------
 # Jev
@@ -225,50 +301,9 @@ def parse_answers(resp, targets):
 
 
 # ---------------------------------------------------------------------------
-# Drawing
+# Detection loop (samples the live stream)
 # ---------------------------------------------------------------------------
-def _font(size):
-    for path in (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ):
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
-
-
-def annotate(img, detections, ts_str):
-    W, H = img.size
-    d = ImageDraw.Draw(img, "RGBA")
-    font = _font(max(18, W // 55))
-    small = _font(max(14, W // 75))
-    for det in detections:
-        if not det["drawn"]:
-            continue
-        b = det["box"]
-        c = tuple(det["color"])
-        x0, y0, x1, y1 = b["left"]*W, b["top"]*H, b["right"]*W, b["bottom"]*H
-        for w in range(4):
-            d.rectangle([x0-w, y0-w, x1+w, y1+w], outline=c)
-        label = f"{det['label']} {int((det['box_conf'] or 0)*100)}%"
-        tb = d.textbbox((0, 0), label, font=font)
-        tw, th = tb[2]-tb[0], tb[3]-tb[1]
-        d.rectangle([x0, max(0, y0-th-10), x0+tw+12, y0], fill=c)
-        d.text((x0+6, max(0, y0-th-8)), label, fill=(0, 0, 0), font=font)
-    # timestamp footer
-    foot = f"JevCam  {ts_str}"
-    tb = d.textbbox((0, 0), foot, font=small)
-    d.rectangle([0, H-(tb[3]-tb[1])-10, (tb[2]-tb[0])+12, H], fill=(0, 0, 0, 180))
-    d.text((6, H-(tb[3]-tb[1])-8), foot, fill=(255, 255, 255), font=small)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=85)
-    return buf.getvalue()
-
-
-# ---------------------------------------------------------------------------
-# Capture / detect loop
-# ---------------------------------------------------------------------------
-def loop():
+def detect_loop():
     while True:
         with CONFIG_LOCK:
             interval = config["interval"]
@@ -277,29 +312,27 @@ def loop():
             alert_target = config["alert_target"].strip()
             alert_phrase = config["alert_phrase"]
             alert_enabled = config["alert_enabled"]
+        idle_alert = {"active": False, "presence": None, "phrase": alert_phrase,
+                      "target": alert_target, "enabled": alert_enabled}
         if not running or (not targets and not alert_target):
-            _store_plain(targets)
             with STATE_LOCK:
-                state["alert"] = {"active": False, "presence": None,
-                                  "phrase": alert_phrase, "target": alert_target,
-                                  "enabled": alert_enabled}
-            time.sleep(min(interval, 2.0))
+                state["alert"] = idle_alert
+            time.sleep(0.5)
+            continue
+        _, jpg = cam.latest()
+        if jpg is None or not cam.ok():
+            with STATE_LOCK:
+                state["alert"] = idle_alert
+            time.sleep(0.5)
             continue
         t0 = time.time()
+        with STATE_LOCK:
+            state["frame_seq"] += 1
         err = None
-        jev_ok = False
-        frame_new = False
-        detections = []
-        alert = {"active": False, "presence": None, "phrase": alert_phrase,
-                 "target": alert_target, "enabled": alert_enabled}
         try:
-            img = capture_rgb()
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=88)
-            img_b64 = base64.b64encode(buf.getvalue()).decode()
-            resp = call_jev(img_b64, targets, alert_target or None)
-            jev_ok = True
+            resp = call_jev(base64.b64encode(jpg).decode(), targets, alert_target or None)
             detections = parse_answers(resp, targets)
+            alert = dict(idle_alert)
             if alert_target:
                 ap = resp.get("answers", {}).get("alert_present", {}).get("noul")
                 alert["presence"] = ap
@@ -307,40 +340,18 @@ def loop():
                                        and ap >= PRESENCE_DRAW_THRESHOLD)
         except Exception as e:  # noqa: BLE001
             err = str(e)
-        latency = int((time.time()-t0)*1000)
-        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        try:
-            img_for_draw = img if not err else capture_rgb()
-            jpeg = annotate(img_for_draw, detections, ts_str)
-            with JPEG_LOCK:
-                latest_jpeg["bytes"] = jpeg
-            frame_new = True
-        except Exception as e:  # noqa: BLE001
-            err = err or str(e)
+        latency = int((time.time() - t0) * 1000)
         with STATE_LOCK:
-            state.update({
-                "ts": ts_str, "detections": detections,
-                "latency_ms": latency, "error": err,
-                "frames": state["frames"] + 1, "alert": alert,
-                "jev_count": state["jev_count"] + (1 if jev_ok else 0),
-                "frame_seq": state["frame_seq"] + (1 if frame_new else 0),
-            })
-        dt = time.time() - t0
-        time.sleep(max(0.1, interval - dt))
-
-
-def _store_plain(targets):
-    """When paused/no targets, still refresh the live image."""
-    try:
-        img = capture_rgb()
-        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        jpeg = annotate(img, [], ts_str)
-        with JPEG_LOCK:
-            latest_jpeg["bytes"] = jpeg
-        with STATE_LOCK:
-            state["frame_seq"] += 1
-    except Exception:  # noqa: BLE001
-        pass
+            state["frames"] += 1
+            state["latency_ms"] = latency
+            state["error"] = err
+            if err is None:
+                state.update({
+                    "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "detections": detections, "alert": alert,
+                    "jev_count": state["jev_count"] + 1,
+                })
+        time.sleep(max(0.0, interval - (time.time() - t0)))
 
 
 # ---------------------------------------------------------------------------
@@ -355,10 +366,24 @@ def index():
     return send_file(os.path.join(HERE, "index.html"))
 
 
+@app.route("/stream.mjpg")
+def stream():
+    def gen():
+        seq = -1
+        while True:
+            s, f = cam.wait_frame(seq, timeout=2.0)
+            if f is None or s == seq:
+                continue
+            seq = s
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                   + str(len(f)).encode() + b"\r\n\r\n" + f + b"\r\n")
+    return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame",
+                    headers={"Cache-Control": "no-store"})
+
+
 @app.route("/latest.jpg")
 def latest():
-    with JPEG_LOCK:
-        b = latest_jpeg["bytes"]
+    _, b = cam.latest()
     if not b:
         return Response("no frame yet", status=503)
     return Response(b, mimetype="image/jpeg",
@@ -387,6 +412,10 @@ def api_state():
         s = dict(state)
     with CONFIG_LOCK:
         s["config"] = dict(config)
+    s["stream_fps"] = cam.fps()
+    s["camera_ok"] = cam.ok()
+    if not s["camera_ok"]:
+        s["error"] = cam.error or "camera offline - check the ribbon cable"
     return jsonify(s)
 
 
@@ -398,7 +427,7 @@ def api_config():
             config["targets"] = [str(t).strip() for t in data["targets"] if str(t).strip()][:8]
         if "interval" in data:
             try:
-                config["interval"] = max(1.0, min(60.0, float(data["interval"])))
+                config["interval"] = max(0.5, min(60.0, float(data["interval"])))
             except (TypeError, ValueError):
                 pass
         if "running" in data:
@@ -414,5 +443,6 @@ def api_config():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=loop, daemon=True).start()
+    cam.start()
+    threading.Thread(target=detect_loop, daemon=True).start()
     app.run(host="0.0.0.0", port=8000, threaded=True)

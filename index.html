@@ -27,8 +27,12 @@
   @media(max-width:900px){.wrap{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
     box-shadow:var(--shadow);overflow:hidden}
-  .feed{position:relative;background:#0a0b0d;aspect-ratio:1568/882}
+  .feed{position:relative;background:#0a0b0d;aspect-ratio:16/9;overflow:hidden}
   .feed img{width:100%;height:100%;object-fit:contain;display:block}
+  .feed .boxes{position:absolute;inset:0;pointer-events:none}
+  .feed .bx{position:absolute;border:3px solid;border-radius:4px;transition:all .35s ease-out}
+  .feed .bx b{position:absolute;left:-3px;top:-24px;font-size:12px;font-weight:800;color:#000;
+    padding:3px 7px;border-radius:4px 4px 4px 0;white-space:nowrap}
   .feed .badge{position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.62);
     color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;backdrop-filter:blur(4px);
     max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -141,11 +145,12 @@
 <div class="wrap">
   <div class="card">
     <div class="feed" id="feed">
-      <img id="frame" alt="camera feed">
+      <img id="frame" src="/stream.mjpg" alt="camera feed">
+      <div class="boxes" id="boxes"></div>
       <span class="live"><i></i>LIVE</span>
       <div class="leds">
         <span class="pj" title="Blinks on each Jev response"><i class="led jev" id="ledJev"></i>JEV</span>
-        <span class="pf" title="Blinks on each new frame"><i class="led frm" id="ledFrame"></i>FRAME</span>
+        <span class="pf" title="Blinks on each frame sampled for Jev"><i class="led frm" id="ledFrame"></i>FRAME</span>
       </div>
       <span class="badge" id="fbadge">&nbsp;</span>
       <div class="offline">
@@ -196,8 +201,8 @@
         <textarea id="targets" spellcheck="false" placeholder="person&#10;cell phone&#10;hard hat&#10;unattended bag"></textarea>
         <div class="hint">e.g. &ldquo;a person wearing a mask&rdquo;, &ldquo;a delivery package&rdquo;, &ldquo;a dog&rdquo;.</div>
         <div class="row">
-          <label class="lbl" style="margin:0">Every</label>
-          <input type="number" id="interval" min="1" max="60" step="1" value="5">
+          <label class="lbl" style="margin:0">Analyze every</label>
+          <input type="number" id="interval" min="0.5" max="60" step="0.5" value="1">
           <label class="lbl" style="margin:0">sec</label>
           <button id="apply" style="margin-left:auto">Apply</button>
           <button id="pause" class="ghost">Pause</button>
@@ -223,7 +228,7 @@ const $ = s => document.querySelector(s);
 
 async function pushConfig(extra={}){
   const targets = $("#targets").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,8);
-  const interval = parseFloat($("#interval").value)||5;
+  const interval = parseFloat($("#interval").value)||1;
   const body = Object.assign({
     targets, interval,
     alert_target: $("#alertTarget").value.trim(),
@@ -312,15 +317,24 @@ let focusGuard = {};
 function hydrate(id,val){ const el=$("#"+id);
   if(!focusGuard[id] && document.activeElement!==el && el.value.trim()==="" && val) el.value=val; }
 
-function refreshImg(){
-  $("#frame").src = "/latest.jpg?t=" + Date.now();
+// live MJPEG stream: reconnect if it drops (server restart, network blip)
+function reconnectStream(){ $("#frame").src = "/stream.mjpg?t=" + Date.now(); }
+$("#frame").addEventListener("error", ()=>setTimeout(reconnectStream, 2000));
+
+// detection boxes drawn over the live video (coords are 0-1 fractions)
+function drawBoxes(dets, show){
+  $("#boxes").innerHTML = !show ? "" : dets.filter(d=>d.drawn && d.box).map(d=>{
+    const b = d.box, col = `rgb(${(d.color||[37,99,235]).join(",")})`;
+    return `<div class="bx" style="left:${b.left*100}%;top:${b.top*100}%;width:${(b.right-b.left)*100}%;height:${(b.bottom-b.top)*100}%;border-color:${col}">
+      <b style="background:${col}">${esc(d.label)} ${Math.round((d.box_conf||0)*100)}%</b></div>`;
+  }).join("");
 }
+
 // indicator lights
 let lastJev = null, lastFrame = null;
 function blink(el){
   [el, el.parentElement].forEach(n=>{ n.classList.remove("blink"); void n.offsetWidth; n.classList.add("blink"); });
 }
-$("#frame").addEventListener("load", ()=>blink($("#ledFrame")));
 
 function updateAlarm(al){
   al = al || {};
@@ -357,21 +371,23 @@ async function poll(){
     hydrate("targets",(cfg.targets||[]).join("\n"));
     hydrate("alertTarget",cfg.alert_target||"");
     hydrate("alertPhrase",cfg.alert_phrase||"");
-    if(document.activeElement!==$("#interval")) $("#interval").value = cfg.interval||5;
+    if(document.activeElement!==$("#interval")) $("#interval").value = cfg.interval||1;
     if(document.activeElement!==$("#alertEnabled")) $("#alertEnabled").checked = cfg.alert_enabled!==false;
     updateAlarm(s.alert);
     if(s.jev_count !== lastJev){ if(lastJev !== null) blink($("#ledJev")); lastJev = s.jev_count; }
-    if(s.frame_seq !== lastFrame){ lastFrame = s.frame_seq; refreshImg(); }  // FRAME blinks on load
-    const camErr = s.error && /camera|ribbon|sensor/i.test(s.error);
-    $("#feed").classList.toggle("off", !!camErr);
+    if(s.frame_seq !== lastFrame){ if(lastFrame !== null) blink($("#ledFrame")); lastFrame = s.frame_seq; }
+    const camErr = s.camera_ok === false;
+    const wasOff = $("#feed").classList.contains("off");
+    $("#feed").classList.toggle("off", camErr);
+    if(wasOff && !camErr) reconnectStream();   // camera back: restart the video
     $("#statusdot").style.background = camErr ? "var(--no)" : (cfg.running ? "var(--ok)" : "var(--no)");
-    const fps = s.latency_ms ? (1000/s.latency_ms).toFixed(1)+" fps" : "&mdash;";
     $("#meta").innerHTML = (camErr?"camera offline":(cfg.running?"running":"paused"))
-      + " &middot; " + fps
+      + " &middot; video " + (s.stream_fps!=null? s.stream_fps+" fps":"&mdash;")
+      + " &middot; Jev every " + (cfg.interval||1) + "s"
       + " &middot; " + (s.latency_ms!=null? s.latency_ms+" ms":"&mdash;")
-      + " &middot; #" + (s.frames||0)
       + (s.ts? " &middot; "+s.ts.split(" ")[1]:"");
     const dets = s.detections||[];
+    drawBoxes(dets, !camErr && cfg.running);
     $("#fbadge").textContent = camErr ? "" :
       (dets.filter(d=>d.present).map(d=>d.label).join(" · ") || "no targets found");
     const box = $("#dets");
