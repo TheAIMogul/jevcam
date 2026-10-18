@@ -8,6 +8,7 @@ web UI that shows the annotated frame plus per-target presence probability.
 The target list ("what it should see") is editable live from the web UI.
 """
 import base64
+import hashlib
 import io
 import json
 import os
@@ -68,6 +69,57 @@ def load_key():
 
 
 TYPESAFE_KEY = load_key()
+
+# ---------------------------------------------------------------------------
+# ElevenLabs TTS (yelling radio-DJ alarm voice)
+# ---------------------------------------------------------------------------
+ELEVEN_KEY_FILE = os.path.expanduser("~/.config/elevenlabs/theberkleytwins-api-key")
+ELEVEN_VOICE = "FmJ4FDkdrYIKzBTruTkV"   # David Hertal - Radio DJ
+ELEVEN_MODEL = "eleven_v3"              # expressive; supports [shouting] tag
+TTS_DIR = "/tmp/jevcam_tts"
+os.makedirs(TTS_DIR, exist_ok=True)
+try:
+    with open(ELEVEN_KEY_FILE) as f:
+        ELEVEN_KEY = f.read().strip()
+except OSError:
+    ELEVEN_KEY = ""
+TTS_LOCK = threading.Lock()
+
+
+def tts_path(phrase):
+    h = hashlib.sha1(f"{ELEVEN_VOICE}|{ELEVEN_MODEL}|{phrase}".encode()).hexdigest()[:16]
+    return os.path.join(TTS_DIR, f"{h}.mp3")
+
+
+def generate_tts(phrase):
+    """Generate (and cache) a yelling radio-DJ MP3 for phrase. Returns path or None."""
+    phrase = (phrase or "").strip()
+    if not phrase or not ELEVEN_KEY:
+        return None
+    path = tts_path(phrase)
+    if os.path.exists(path) and os.path.getsize(path) > 0:
+        return path
+    with TTS_LOCK:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            return path
+        up = phrase.upper()
+        body = {
+            "text": f"[shouting] {up}! {up}!",
+            "model_id": ELEVEN_MODEL,
+            "voice_settings": {"stability": 0.3, "similarity_boost": 0.8, "style": 0.9},
+        }
+        r = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVEN_VOICE}"
+            "?output_format=mp3_44100_128",
+            headers={"xi-api-key": ELEVEN_KEY, "Content-Type": "application/json"},
+            data=json.dumps(body), timeout=30,
+        )
+        r.raise_for_status()
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(r.content)
+        os.replace(tmp, path)
+        return path
 
 # ---------------------------------------------------------------------------
 # Camera
@@ -301,6 +353,22 @@ def latest():
         return Response("no frame yet", status=503)
     return Response(b, mimetype="image/jpeg",
                     headers={"Cache-Control": "no-store"})
+
+
+@app.route("/api/alert_audio")
+def api_alert_audio():
+    phrase = request.args.get("phrase")
+    if phrase is None:
+        with CONFIG_LOCK:
+            phrase = config["alert_phrase"]
+    try:
+        path = generate_tts(phrase)
+    except Exception as e:  # noqa: BLE001
+        return Response(f"tts error: {e}", status=502)
+    if not path:
+        return Response("no tts (missing phrase or key)", status=404)
+    return send_file(path, mimetype="audio/mpeg",
+                     max_age=86400, conditional=True)
 
 
 @app.route("/api/state")

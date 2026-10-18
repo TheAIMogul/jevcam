@@ -93,9 +93,30 @@
   @keyframes flashred{0%{background:#e4352b}50%{background:#7a0f0a}100%{background:#e4352b}}
   @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
   .alertcfg{display:grid;gap:8px}
+
+  /* Full-width SCREAMER banner */
+  #screamer{position:fixed;top:0;left:0;width:100vw;z-index:9999;display:none;
+    align-items:center;justify-content:center;gap:clamp(12px,4vw,56px);
+    padding:clamp(14px,3.5vh,48px) 16px;background:#e4352b;color:#fff;
+    box-shadow:0 10px 40px rgba(0,0,0,.4);border-bottom:4px solid #fff}
+  #screamer.show{display:flex;animation:screamflash .55s steps(1,end) infinite}
+  #screamer .ph{font-weight:900;letter-spacing:-.02em;line-height:1;text-align:center;
+    font-size:clamp(2rem,8vw,7rem);text-transform:uppercase;
+    text-shadow:0 3px 0 rgba(0,0,0,.25)}
+  #screamer .siren{font-size:clamp(2.4rem,9vw,8rem);line-height:1;animation:sirensway .55s ease-in-out infinite}
+  @keyframes screamflash{0%{background:#e4352b}50%{background:#000}100%{background:#e4352b}}
+  @keyframes sirensway{0%,100%{transform:rotate(-12deg) scale(1)}50%{transform:rotate(12deg) scale(1.12)}}
+  @media(prefers-reduced-motion:reduce){#screamer.show,#screamer .siren{animation:none}}
 </style>
 </head>
 <body>
+<div id="screamer">
+  <span class="siren">🚨</span>
+  <span class="ph" id="screamerText">ALERT</span>
+  <span class="siren">🚨</span>
+</div>
+<audio id="alertAudio" preload="auto" crossorigin="anonymous"></audio>
+
 <header>
   <span class="dot" id="statusdot"></span>
   <h1>JevCam &middot; live object detection</h1>
@@ -207,19 +228,60 @@ function setMute(v){
   const b = $("#mute");
   b.textContent = v ? "Unmute" : "Mute";
   b.classList.toggle("on", v);
-  if(v && window.speechSynthesis) window.speechSynthesis.cancel();
+  if(v){
+    if(window.speechSynthesis) window.speechSynthesis.cancel();
+    try{ $("#alertAudio").pause(); }catch(e){}
+  }
 }
 $("#mute").onclick = ()=>setMute(!muted);
 setMute(muted);
 
-function speak(text){
-  if(!text || muted || !window.speechSynthesis) return;
+// --- Radio-announcer audio engine (ElevenLabs voice + Web Audio radio filter) ---
+const audioEl = $("#alertAudio");
+let actx=null, srcNode=null, audioReady=false, loadedPhrase=null;
+function initAudioGraph(){
+  if(audioReady) return;
   try{
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
-  }catch(e){}
+    actx = new (window.AudioContext||window.webkitAudioContext)();
+    srcNode = actx.createMediaElementSource(audioEl);
+    // radio/comms voice: band-limit + gentle distortion + compression + boost
+    const hp=actx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=380;
+    const lp=actx.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=3200;
+    const peak=actx.createBiquadFilter(); peak.type="peaking"; peak.frequency.value=1800; peak.Q.value=1.2; peak.gain.value=8;
+    const shaper=actx.createWaveShaper();
+    const n=256,c=new Float32Array(n); const amt=12;
+    for(let i=0;i<n;i++){const x=i*2/n-1; c[i]=(1+amt)*x/(1+amt*Math.abs(x));}
+    shaper.curve=c; shaper.oversample="4x";
+    const comp=actx.createDynamicsCompressor();
+    comp.threshold.value=-24; comp.ratio.value=12; comp.attack.value=.003; comp.release.value=.2;
+    const gain=actx.createGain(); gain.value=2.2;  // loud
+    srcNode.connect(hp); hp.connect(lp); lp.connect(peak); peak.connect(shaper);
+    shaper.connect(comp); comp.connect(gain); gain.connect(actx.destination);
+    audioReady=true;
+  }catch(e){ audioReady=false; }
+}
+function resumeAudio(){ try{ if(actx && actx.state==="suspended") actx.resume(); }catch(e){} }
+// unlock audio on first user gesture (autoplay policy)
+["click","keydown","touchstart"].forEach(ev=>document.addEventListener(ev,()=>{initAudioGraph();resumeAudio();},{once:false,passive:true}));
+
+function loadAlertAudio(phrase){
+  if(!phrase || phrase===loadedPhrase) return;
+  loadedPhrase = phrase;
+  audioEl.src = "/api/alert_audio?phrase=" + encodeURIComponent(phrase) + "&v=" + Date.now();
+  try{ audioEl.load(); }catch(e){}
+}
+function speak(text){
+  if(muted) return;
+  initAudioGraph(); resumeAudio();
+  try{ audioEl.currentTime=0; }catch(e){}
+  // prefer the ElevenLabs radio voice; fall back to browser TTS if it fails
+  const p = audioEl.play();
+  if(p && p.catch) p.catch(()=>{
+    if(window.speechSynthesis){
+      const u=new SpeechSynthesisUtterance(text); u.volume=1; u.rate=1.05;
+      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+    }
+  });
 }
 
 let focusGuard = {};
@@ -237,16 +299,21 @@ function refreshImg(){
 
 function updateAlarm(al){
   al = al || {};
-  const card = $("#alarm"), icon = $("#alarmIcon");
+  const card = $("#alarm"), icon = $("#alarmIcon"), screamer = $("#screamer");
+  const phrase = al.phrase || "Alert";
+  if(al.phrase) loadAlertAudio(al.phrase);      // prefetch radio voice
   const active = !!(al.active && al.enabled);
   card.classList.toggle("firing", active);
+  // full-width screamer banner
+  $("#screamerText").textContent = phrase;
+  screamer.classList.toggle("show", active);
   if(active){
     $("#alarmState").textContent = "⚠ ALERT";
-    $("#alarmPhrase").textContent = al.phrase || "Alert";
+    $("#alarmPhrase").textContent = phrase;
     icon.textContent = muted ? "🔕" : "🚨";
     // announce immediately on trigger, then every 10s while present
     if(!muted && Date.now()-lastSpoke >= SPEAK_EVERY){
-      speak(al.phrase || "Alert"); lastSpoke = Date.now();
+      speak(phrase); lastSpoke = Date.now();
     }
   }else{
     lastSpoke = 0;  // reset so the next detection speaks right away
