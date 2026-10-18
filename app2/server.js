@@ -247,16 +247,30 @@ pollCamera();
 // Vision: real PPE checks with TypeSafe Jev on JevCam's live frames
 // ---------------------------------------------------------------------------
 // The page posts its active watch list to /api/vision/items. Once a second, while
-// a page is polling /api/vision, the newest JevCam frame goes to Jev with one
-// question per item about the person closest to the camera. App 2 asks its own
-// questions, so it never changes JevCam's target list.
+// a page is polling /api/vision, the newest JevCam frame goes to Jev with questions
+// about everyone in view. Jev has no "find all people" question, so one request asks:
+//   - "Are there at least k people?" for k = 1..slots (a monotone headcount),
+//   - for each k: the box of "the k-th person from the left", and
+//   - for each k and each watch-list item: "Is the k-th person from the left wearing <desc>?"
+// Jev answers all questions in parallel, so this costs about one round trip. Boxes that
+// collapse onto the same person are merged. App 2 asks its own questions, so it never
+// changes JevCam's target list.
 const TYPESAFE_KEY = (() => {
   try { return fs.readFileSync(path.join(os.homedir(), '.config/typesafe/api-key'), 'utf8').trim(); } catch { return ''; }
 })();
 const VISION_INTERVAL_MS = 1000;
 const VISION_IDLE_MS = 30000;   // stop asking Jev when no page has polled for this long
-const WHO = 'the person closest to the camera';
-const vision = { items: [], lastPoll: 0, busy: false, seq: 0, ts: null, latency_ms: null, error: null, person: null, det: {}, frame: null };
+const MIN_SLOTS = 3, MAX_SLOTS = 8;   // people asked about per tick: last headcount + 2, within these bounds
+const ORD = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth'];
+const who = (k) => `the ${ORD[k]} person from the left`;
+const vision = { items: [], lastPoll: 0, busy: false, seq: 0, ts: null, latency_ms: null, error: null, people: [], person: null, det: {}, frame: null, slots: MIN_SLOTS };
+
+function iou(a, b) {
+  const x0 = Math.max(a.left, b.left), y0 = Math.max(a.top, b.top), x1 = Math.min(a.right, b.right), y1 = Math.min(a.bottom, b.bottom);
+  const inter = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  const area = (r) => Math.max(0, r.right - r.left) * Math.max(0, r.bottom - r.top);
+  return inter / (area(a) + area(b) - inter || 1);
+}
 
 function askJev(body) {
   return new Promise((resolve, reject) => {
@@ -288,12 +302,13 @@ async function visionTick() {
   try {
     const f = await fetchBuffer(`${JEVCAM}/latest.jpg`);
     if (f.status !== 200 || f.body.length < 1000) throw new Error('JevCam has no frame (camera offline?)');
-    const questions = {
-      person: { type: 'noul', instructions: 'Is there a person clearly visible in `photo`?' },
-      person_box: { type: 'box', instructions: `${WHO} in \`photo\`` },
-    };
-    for (const it of vision.items) {
-      questions[`item_${it.id}`] = { type: 'noul', instructions: `Is ${WHO} in \`photo\` wearing ${it.desc}?` };
+    const slots = vision.slots;
+    const items = vision.items;
+    const questions = {};
+    for (let k = 0; k < slots; k++) {
+      questions[`n${k}`] = { type: 'noul', instructions: k === 0 ? 'Is there at least one person clearly visible in `photo`?' : `Are there at least ${k + 1} different people clearly visible in \`photo\`?` };
+      questions[`b${k}`] = { type: 'box', instructions: `${who(k)} in \`photo\`` };
+      for (const it of items) questions[`i${k}_${it.id}`] = { type: 'noul', instructions: `Is ${who(k)} in \`photo\` wearing ${it.desc}?` };
     }
     const r = await askJev({
       model: 'jev-preview', state: { photo: 'frame' },
@@ -301,15 +316,32 @@ async function visionTick() {
       questions,
     });
     const a = r.answers || {};
-    const det = {};
-    for (const it of vision.items) {
-      const p = (a[`item_${it.id}`] || {}).noul;
-      if (p != null) det[it.id] = { present: p >= 0.5, conf: round2(p), name: it.name };
+    // headcount: the "at least k" answers are monotone in truth; stop at the first no
+    let count = 0;
+    while (count < slots && ((a[`n${count}`] || {}).noul ?? 0) >= 0.5) count++;
+    const people = [];
+    for (let k = 0; k < count; k++) {
+      const b = a[`b${k}`] || {};
+      if (!b.box) continue;
+      const det = {};
+      for (const it of items) {
+        const p = (a[`i${k}_${it.id}`] || {}).noul;
+        if (p != null) det[it.id] = { present: p >= 0.5, conf: round2(p), name: it.name };
+      }
+      const dup = people.find((q) => iou(q.box, b.box) > 0.6);
+      if (dup) continue;   // two ordinals landed on the same person
+      people.push({ slot: k, box: b.box, box_conf: b.confidence ?? null, presence: round2((a[`n${k}`] || {}).noul ?? 0), det });
     }
-    const pb = a.person_box || {};
+    people.sort((p, q) => (p.box.left + p.box.right) - (q.box.left + q.box.right));
+    // next tick asks about a couple more people than were seen, so newcomers are picked up
+    vision.slots = Math.max(MIN_SLOTS, Math.min(MAX_SLOTS, count + 2));
+    const near = people.slice().sort((p, q) => ((q.box.right - q.box.left) * (q.box.bottom - q.box.top)) - ((p.box.right - p.box.left) * (p.box.bottom - p.box.top)))[0];
     Object.assign(vision, {
-      seq: vision.seq + 1, ts: new Date().toISOString(), latency_ms: Date.now() - t0, error: null, frame: f.body, det,
-      person: { presence: (a.person || {}).noul ?? null, box: pb.box || null, box_conf: pb.confidence ?? null },
+      seq: vision.seq + 1, ts: new Date().toISOString(), latency_ms: Date.now() - t0, error: null, frame: f.body,
+      people, count, asked: slots, questions: Object.keys(questions).length,
+      // kept for older pages: the largest (nearest) person
+      person: near ? { presence: near.presence, box: near.box, box_conf: near.box_conf } : { presence: 0, box: null, box_conf: null },
+      det: near ? near.det : {},
     });
   } catch (e) {
     vision.error = e.message;
@@ -318,7 +350,9 @@ async function visionTick() {
     vision.busy = false;
   }
 }
-setInterval(visionTick, VISION_INTERVAL_MS);
+// The slot-based loop above is kept for reference but no longer runs: the page now finds people
+// with an in-browser detector and asks /api/vision/check about each person's crop.
+// setInterval(visionTick, VISION_INTERVAL_MS);
 
 // ---------------------------------------------------------------------------
 // Notifications (ntfy / Pushover) - real pushes, only when configured
@@ -460,7 +494,7 @@ function json(res, status, body) {
 function readBody(req) {
   return new Promise((resolve) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 1e6) req.destroy(); });
+    req.on('data', (c) => { data += c; if (data.length > 8e6) req.destroy(); });
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } });
   });
 }
@@ -511,6 +545,69 @@ const server = http.createServer(async (req, res) => {
     return res.end(vision.frame);
   }
 
+  // Development probe: run arbitrary Jev questions against the newest frame. Only exists when the
+  // server is started with VISION_PROBE=1, and only answers requests from this machine.
+  if (p === '/api/vision/probe' && req.method === 'POST' && process.env.VISION_PROBE === '1'
+      && /^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(req.socket.remoteAddress || '')) {
+    const { questions, images } = await readBody(req);
+    try {
+      let state, assets;
+      if (images && typeof images === 'object') {   // {name: base64 jpeg}: test several images in one request
+        state = {}; assets = {};
+        for (const [k, b64] of Object.entries(images)) { state[k] = `a_${k}`; assets[`a_${k}`] = { type: 'image', format: 'jpg', data_base64: b64 }; }
+      } else {
+        const f = await fetchBuffer(`${JEVCAM}/latest.jpg`);
+        vision.frame = f.body;
+        state = { photo: 'frame' }; assets = { frame: { type: 'image', format: 'jpg', data_base64: f.body.toString('base64') } };
+      }
+      const t0 = Date.now();
+      const r = await askJev({ model: 'jev-preview', state, assets, questions });
+      return json(res, 200, { latency_ms: Date.now() - t0, answers: r.answers || r });
+    } catch (e) { return json(res, 500, { error: e.message }); }
+  }
+
+  // Newest camera frame for the page's person detector (same origin, so the page can crop it).
+  if (p === '/api/vision/live.jpg') {
+    const f = await fetchBuffer(`${JEVCAM}/latest.jpg`).catch(() => null);
+    if (!f || f.status !== 200) { res.writeHead(503, { 'Cache-Control': 'no-store' }); return res.end(); }
+    vision.frame = f.body; vision.lastPoll = Date.now();
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
+    return res.end(f.body);
+  }
+
+  // Per-person compliance: the page posts one crop per detected person; one Jev request asks
+  // "Is the person in <crop> wearing <item>?" for every person x active watch-list item.
+  if (p === '/api/vision/check' && req.method === 'POST') {
+    if (!TYPESAFE_KEY) return json(res, 503, { error: 'no TypeSafe key on this machine' });
+    const { people } = await readBody(req);
+    const list = (Array.isArray(people) ? people : []).filter((x) => x && x.img).slice(0, 12);
+    const items = vision.items;
+    if (!list.length || !items.length) return json(res, 200, { det: {}, head: {} });
+    const state = {}, assets = {}, questions = {};
+    list.forEach((x, j) => {
+      state[`p${j}`] = `a${j}`; assets[`a${j}`] = { type: 'image', format: 'jpg', data_base64: String(x.img) };
+      for (const it of items) questions[`q${j}_${it.id}`] = { type: 'noul', instructions: `Is the person in \`p${j}\` wearing ${it.desc}?` };
+      questions[`h${j}`] = { type: 'box', instructions: `the head of the person in \`p${j}\`` };
+    });
+    const t0 = Date.now();
+    try {
+      const r = await askJev({ model: 'jev-preview', state, assets, questions });
+      const a = r.answers || {}, det = {}, head = {};
+      list.forEach((x, j) => {
+        const d = {};
+        for (const it of items) { const v = (a[`q${j}_${it.id}`] || {}).noul; if (v != null) d[it.id] = { present: v >= 0.5, conf: round2(v), name: it.name }; }
+        det[String(x.id)] = d;
+        const hb = a[`h${j}`] || {};
+        if (hb.box) head[String(x.id)] = { box: hb.box, conf: hb.confidence ?? 0 };
+      });
+      Object.assign(vision, { seq: vision.seq + 1, ts: new Date().toISOString(), latency_ms: Date.now() - t0, error: null });
+      return json(res, 200, { det, head, latency_ms: Date.now() - t0 });
+    } catch (e) {
+      vision.error = e.message; vision.latency_ms = Date.now() - t0;
+      return json(res, 502, { error: e.message });
+    }
+  }
+
   if (p === '/api/vision/items' && req.method === 'POST') {
     const { items } = await readBody(req);
     vision.items = (Array.isArray(items) ? items : [])
@@ -518,6 +615,18 @@ const server = http.createServer(async (req, res) => {
       .map((i) => ({ id: String(i.id).slice(0, 40), name: String(i.name || i.id).slice(0, 60), desc: String(i.desc).slice(0, 140) }));
     vision.det = {};   // answers for the old list no longer apply
     return json(res, 200, { items: vision.items });
+  }
+
+  // Relay of JevCam's MJPEG stream, for running this server on a laptop with JEVCAM_URL pointing
+  // at the Pi. On the Pi itself the page reads :8000 directly and never calls this.
+  if (p === '/api/stream.mjpg') {
+    const up = http.get(`${JEVCAM}/stream.mjpg`, (r) => {
+      res.writeHead(r.statusCode || 502, { 'Content-Type': r.headers['content-type'] || 'multipart/x-mixed-replace', 'Cache-Control': 'no-store' });
+      r.pipe(res);
+    });
+    up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+    req.on('close', () => up.destroy());
+    return;
   }
 
   if (p === '/api/frame.jpg') {

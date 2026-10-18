@@ -183,6 +183,48 @@
   .tag.critical { background: rgba(255,90,90,.15); color: #ff8a8a; } .tag.warning { background: rgba(250,178,25,.15); color: var(--warning); }
   .wi .act { display: flex; gap: 2px; }
   .wi .act button { width: 26px; height: 26px; border-radius: 7px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .wi .st.off { color: var(--muted); }
+  .wi .st.soon { color: var(--warning); }
+  .wi .tag { cursor: pointer; }
+  .wi .tag:hover { outline: 1px solid currentColor; }
+  .wi.req { border-color: rgba(47,211,111,.3); }
+  .qadd { display: flex; gap: 6px; margin-top: 10px; }
+  .qadd .input { flex: 1; padding: 7px 10px; font-size: 12.5px; min-width: 0; }
+  .suggest { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+  .suggest:empty { display: none; }
+  .suggest .lbl { font-size: 11.5px; color: var(--muted); margin-right: 2px; }
+  .suggest button { border: 1px dashed var(--border-2); background: transparent; color: var(--text-2); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .suggest button:hover { color: var(--text); border-color: var(--accent); border-style: solid; }
+  .wl:empty { display: none; }
+
+  .showseg { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: rgba(255,255,255,.03); }
+  .showseg span { font-size: 11px; color: var(--muted); padding: 0 6px 0 8px; letter-spacing: .06em; text-transform: uppercase; }
+  .showseg button { height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--text-2); cursor: pointer; font-weight: 600; font-size: 12px; }
+  .showseg button:hover { color: var(--text); }
+  .showseg button[aria-pressed="true"] { background: rgba(255,255,255,.1); color: var(--text); }
+  .showseg button.bad[aria-pressed="true"] { background: rgba(255,90,90,.2); border-color: rgba(255,90,90,.6); color: #ffb0b0; }
+  .showseg button.ok[aria-pressed="true"] { background: rgba(47,211,111,.16); border-color: rgba(47,211,111,.55); color: #9af0bd; }
+  /* Demo: no verdict panel under the feed; the feed takes the space. */
+  #verdict { display: none !important; }
+  .feed-card { grid-template-rows: auto minmax(0, 1fr); }
+  /* ---------- compliance checklist (verdict chips) ---------- */
+  .item.ok { background: rgba(47,211,111,.12); border-color: rgba(47,211,111,.5); }
+  .item.bad { background: rgba(255,90,90,.16); border-color: rgba(255,90,90,.7); font-weight: 600; }
+  .item.bad::after { content: 'MISSING'; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: var(--critical-ui); margin-left: 2px; }
+  .item.off::after { content: 'not required'; font-size: 10px; color: var(--muted); margin-left: 2px; }
+  .item.click { cursor: pointer; }
+  .item.click:hover { filter: brightness(1.25); }
+  .item .am, .row-e .am { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 1px 5px; border-radius: 5px; background: rgba(57,135,229,.28); color: #9cc4ff; text-transform: uppercase; }
+  .verdict .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- live entries: per-item strip, click to review ---------- */
+  .row-e { cursor: pointer; }
+  .row-e:hover { border-color: var(--border-2); }
+  .row-e.sel { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row-e .mini { display: flex; gap: 3px; margin-top: 4px; flex-wrap: wrap; }
+  .row-e .mini i { font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,.06); color: var(--muted); white-space: nowrap; }
+  .row-e .mini i.ok { background: rgba(47,211,111,.15); color: var(--good-ui); }
+  .row-e .mini i.bad { background: rgba(255,90,90,.22); color: #ff9a9a; }
   .wi .act button:hover { background: rgba(255,255,255,.08); color: var(--text); }
   .toggle.sm { width: 34px; height: 20px; } .toggle.sm::after { width: 14px; height: 14px; } .toggle.sm[aria-checked="true"]::after { transform: translateX(14px); }
   .wform { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 45; width: min(480px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 20px; border-radius: 16px; border: 1px solid var(--border-2); background: #11151c; box-shadow: 0 30px 80px rgba(0,0,0,.65); animation: in .25s cubic-bezier(.2,.8,.2,1); }
@@ -228,6 +270,7 @@
   }
   /* The verdict row drops its item chips to a second line when the feed column is narrow. */
   .verdict .t { white-space: nowrap; }
+  .verdict > div:nth-child(2) { min-width: 240px; }
   .items { flex-wrap: wrap; justify-content: flex-end; }
   @media (max-width: 1360px) and (min-width: 1181px) {
     .verdict { grid-template-columns: auto 1fr; }
@@ -269,7 +312,12 @@
     <section class="card feed-card">
       <div class="feed-head">
         <div><div class="title">Live feed · Gate A</div><div class="sub">NoIR camera with IR illumination · detects every worker who enters and checks their PPE</div></div>
-        <span class="chip" style="height:30px;font-size:12px"><span class="dot"></span> Detection active</span>
+        <div class="showseg" id="showSeg" role="group" aria-label="Which people to box">
+          <span>Show</span>
+          <button data-v="bad" class="bad">✗ Non-compliant</button>
+          <button data-v="ok" class="ok">✓ Compliant</button>
+          <button data-v="all">Both</button>
+        </div>
       </div>
       <div class="feed" id="feed">
         <canvas id="scene"></canvas>
@@ -309,7 +357,9 @@
       </div>
 
       <div class="card watch">
-        <div class="head"><h2>Watch list</h2><span class="help" id="watchSub"></span><button class="btn sm" id="btnAddItem">+ Add item</button></div>
+        <div class="head"><h2>Watch list</h2><span class="help" id="watchSub"></span></div>
+        <form class="qadd" id="qadd" autocomplete="off"><input class="input" id="qaddName" placeholder="What must workers wear? Type it and press Enter" maxlength="40" aria-label="Add a watch-list item"><button class="btn sm primary" type="submit">Add</button></form>
+        <div class="suggest" id="suggest"></div>
         <div class="wl" id="wl"></div>
         <div class="wform" id="wform" role="dialog" aria-labelledby="wfTitle" hidden>
           <div class="ft" id="wfTitle">Add to watch list</div>
@@ -370,26 +420,37 @@
   // Watch list: what the camera checks for. The four built-ins cannot be removed; anything can be
   // added for a day, a range of days, or every day. `desc` is the plain-words detection target
   // (on the Pi it is sent verbatim to the vision model).
-  const BUILTIN = [
-    { id: 'hardHat', name: 'Hard hat', desc: 'a hard hat', severity: 'critical', on: true },
-    { id: 'vest', name: 'Safety vest', desc: 'a high-visibility safety vest', severity: 'critical', on: true },
-    { id: 'glasses', name: 'Safety glasses', desc: 'safety glasses', severity: 'warning', on: true },
-    { id: 'gloves', name: 'Gloves', desc: 'work gloves', severity: 'warning', on: false },
-  ].map((b) => ({ ...b, builtin: true, schedule: { type: 'daily' } }));
+  // The list starts empty; items are added one at a time. The catalog only powers the one-tap
+  // suggestions, name matching (so "hard hat" gets the right description and figure) and the
+  // seeded history, which was recorded against the first entry (hats).
+  const CATALOG = [
+    { id: 'hat', name: 'Hat', desc: 'a hat or cap', severity: 'critical', match: /^(a )?(hat|cap|hats|caps)$/i },
+    { id: 'hardHat', name: 'White hard hat', desc: 'a white hard hat', severity: 'critical', match: /hard ?hat|helmet/i },
+    { id: 'vest', name: 'Safety vest', desc: 'a high-visibility safety vest', severity: 'critical', match: /vest/i },
+    { id: 'glasses', name: 'Safety glasses', desc: 'safety glasses', severity: 'warning', match: /glasses|goggles/i },
+    { id: 'gloves', name: 'Gloves', desc: 'work gloves', severity: 'warning', match: /glove/i },
+  ].map((b) => ({ ...b, on: true, schedule: { type: 'daily' } }));
+  const BASELINE = CATALOG.slice(0, 1).map(({ match, ...b }) => b);   // demo history: hats only
+  const BUILTIN = [];
   const THRESH = { low: 0.35, medium: 0.5, high: 0.7 };
   const SENS_HELP = { low: 'Only clear misses alert (confidence under 35%).', medium: 'Items under 50% detection confidence count as missing.', high: 'Borderline detections also alert (under 70%).' };
-  const DEFAULTS = { site: 'Gate A · North Entrance', sensitivity: 'medium', push: { on: false, topic: '' }, sound: false, scanSec: 2, items: BUILTIN };
+  // Demo default: hats only. Open the page with ?reset to put any browser back to this list.
+  const DEMO_ITEMS = [{ id: 'hat', name: 'Hat', desc: 'a hat or cap', severity: 'critical', on: true, builtin: false, schedule: { type: 'daily' } }];
+  const DEFAULTS = { site: 'Gate A · North Entrance', sensitivity: 'medium', push: { on: false, topic: '' }, sound: false, scanSec: 5, show: 'bad', items: DEMO_ITEMS };
   const SCAN_MIN = 1, SCAN_MAX = 60;
   const clampScan = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(SCAN_MAX, Math.max(SCAN_MIN, n)) : DEFAULTS.scanSec; };
+  if (/[?&]reset\b/.test(location.search)) { safe(() => { const o = JSON.parse(localStorage.getItem('ppe.settings') || '{}'); delete o.items; localStorage.setItem('ppe.settings', JSON.stringify(o)); }); history.replaceState(null, '', location.pathname); }
   let settings = { ...DEFAULTS, ...safe(() => JSON.parse(localStorage.getItem('ppe.settings') || '{}')) };
   settings.push = { ...DEFAULTS.push, ...(settings.push || {}) };
+  if (settings.scanSec === 2 && !settings.scanSet) settings.scanSec = 5;   // old default was 2 s; the demo checks every 5 s
   settings.scanSec = clampScan(settings.scanSec);
+  if (!['bad', 'ok', 'all'].includes(settings.show)) settings.show = 'bad';
   {
-    // rebuild the list: built-ins first (restoring saved state, or the old `required` flags), then custom items
+    // restore whatever the user added; nothing is added on their behalf
     const saved = Array.isArray(settings.items) ? settings.items : [];
-    const byId = Object.fromEntries(saved.filter((i) => i && i.id).map((i) => [i.id, i]));
-    const list = BUILTIN.map((b) => ({ ...b, ...(byId[b.id] || {}), builtin: true, on: byId[b.id] ? !!byId[b.id].on : settings.required ? !!settings.required[b.id] : b.on }));
-    for (const i of saved) if (i && i.id && i.name && !list.some((x) => x.id === i.id)) list.push({ severity: 'warning', on: true, schedule: { type: 'daily' }, ...i, builtin: false });
+    const list = [];
+    // items flagged builtin were the old pre-filled defaults, not something the user added: drop them
+    for (const i of saved) if (i && i.id && i.name && !i.builtin && !list.some((x) => x.id === i.id)) list.push({ severity: 'warning', on: true, schedule: { type: 'daily' }, ...i, builtin: false });
     settings.items = list; delete settings.required;
   }
   function safe(fn, fb = {}) { try { return fn() ?? fb; } catch { return fb; } }
@@ -417,12 +478,12 @@
     return 'Every day';
   }
   function itemStatus(item) {
-    if (!item.on) return { text: 'Off', cls: '' };
+    if (!item.on) return { text: 'Not required', cls: 'off' };
     const today = ymd(new Date());
-    if (scheduledOn(item, new Date())) return { text: 'Active today', cls: 'on' };
-    const s = item.schedule;
+    if (scheduledOn(item, new Date())) return { text: 'Required today', cls: 'on' };
+    const s = item.schedule || { type: 'daily' };
     const next = s.type === 'dates' ? (s.dates || []).filter((k) => k > today).sort()[0] : s.type === 'range' && s.from > today ? s.from : null;
-    return next ? { text: `From ${fmtD(next)}`, cls: '' } : { text: 'Expired', cls: '' };
+    return next ? { text: `Required from ${fmtD(next)}`, cls: 'soon' } : { text: 'Expired', cls: 'off' };
   }
   const hhmmss = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -434,13 +495,26 @@
   const entries = [];
   const walkers = [];
   let lastEntry = null;
+  let selected = null;   // the entry shown in the verdict panel (newest by default, or one picked from the list)
+
+  // Supervisor amendment: flip one item of an entry between present and missing, on the spot.
+  function amend(e, id) {
+    const t = THRESH[settings.sensitivity];
+    const detected = !!(e.det[id] && e.det[id].conf >= t);
+    e.override = e.override || {};
+    const next = e.missing.includes(id);           // currently missing -> mark present; present -> mark missing
+    if (next === detected) delete e.override[id]; else e.override[id] = next;
+    if (!Object.keys(e.override).length) delete e.override;
+    e.amended = !!e.override; e.photo = null;
+    selected = e; reapply();
+  }
 
   // Simulated detections for every item on the list at the time of entry (required or not).
-  function detect(force, when) {
+  function detect(force, when, items = settings.items) {
     const det = {};
     const intent = force === undefined ? Math.random() < 0.86 : force;
     let missed = false;
-    for (const it of settings.items) {
+    for (const it of items) {
       const req = activeOn(it, when);
       let present = intent ? (req ? true : Math.random() < 0.6) : Math.random() < 0.55;
       if (!intent && req && !present) missed = true;
@@ -448,19 +522,20 @@
       if (Math.random() < 0.05) conf = rnd(0.42, 0.68);
       det[it.id] = { present, conf: Math.round(conf * 100) / 100, name: it.name };
     }
-    if (!intent && !missed) { const req = activeItems(when); if (req.length) { const v = pick(req); det[v.id] = { present: false, conf: Math.round(rnd(0.03, 0.28) * 100) / 100, name: v.name }; } }
+    if (!intent && !missed) { const req = items.filter((i) => activeOn(i, when)); if (req.length) { const v = pick(req); det[v.id] = { present: false, conf: Math.round(rnd(0.03, 0.28) * 100) / 100, name: v.name }; } }
     return det;
   }
   // Score against the items active at the entry's time. Items the camera never checked for
   // (added later) are skipped, so old entries are not retro-flagged.
-  function evaluate(det, when) {
-    const t = THRESH[settings.sensitivity];
-    const missing = settings.items.filter((i) => activeOn(i, when) && det[i.id] && det[i.id].conf < t).map((i) => i.id);
+  // `override` holds supervisor amendments per item: true = treat as present, false = treat as missing.
+  function evaluate(det, when, override, items = settings.items) {
+    const t = THRESH[settings.sensitivity]; const ov = override || {};
+    const missing = items.filter((i) => activeOn(i, when) && det[i.id] && (ov[i.id] === undefined ? det[i.id].conf < t : ov[i.id] === false)).map((i) => i.id);
     const severity = missing.some((id) => (itemById(id) || {}).severity === 'critical') ? 'critical' : 'warning';
     return { ok: missing.length === 0, missing, severity };
   }
-  function makeEntry(when, force) {
-    const det = detect(force, when); const v = evaluate(det, when);
+  function makeEntry(when, force, items = settings.items) {
+    const det = detect(force, when, items); const v = evaluate(det, when, null, items);
     return { id: Math.random().toString(36).slice(2, 9), ts: when, worker: pick(workers), shift: shiftOf(when), det, ok: v.ok, missing: v.missing, severity: v.severity, seed: Math.random(), photo: null, pushed: null };
   }
   // What the box ticks and verdict chips show for an entry: active items, plus built-ins that were off.
@@ -470,7 +545,8 @@
       const d = e.det[it.id]; if (!d) continue;
       const req = activeOn(it, e.ts), miss = e.missing.includes(it.id);
       if (!req && !it.builtin) continue;
-      out.push({ req, miss, name: it.name, conf: d.conf, txt: `${!req ? '·' : miss ? '✗' : '✓'} ${it.name}${req ? '  ' + Math.round(d.conf * 100) + '%' : ''}` });
+      const amended = !!(e.override && e.override[it.id] !== undefined);
+      out.push({ id: it.id, req, miss, amended, name: it.name, conf: d.conf, txt: `${!req ? '·' : miss ? '✗' : '✓'} ${it.name}${req ? (amended ? '  amended' : '  ' + Math.round(d.conf * 100) + '%') : ''}` });
     }
     return out.slice(0, 7);
   }
@@ -484,7 +560,8 @@
         const r = Math.random();
         const h = r < 0.45 && upto > 6 ? rnd(6, Math.min(8.5, upto)) : r < 0.7 && upto > 18 ? rnd(18, Math.min(20.5, upto)) : rnd(0, upto);
         const t = new Date(d0); t.setHours(Math.floor(h), Math.floor((h % 1) * 60), Math.floor(rnd(0, 60)), 0);
-        if (t < now) entries.push(makeEntry(t));
+        // history was recorded against the standard set and is sealed: it keeps its verdicts
+        if (t < now) entries.push({ ...makeEntry(t, undefined, BASELINE), sealed: true });
       }
     }
     entries.sort((a, b) => a.ts - b.ts);
@@ -499,8 +576,8 @@
     const byShift = {};
     for (const s of ['day', 'night']) { const l = today.filter((e) => e.shift === s); const k = l.filter((e) => e.ok).length; byShift[s] = { n: l.length, rate: l.length ? k / l.length : null, alerts: l.length - k }; }
     const hourly = Array(24).fill(0); for (const e of today) hourly[e.ts.getHours()]++;
-    const miss = {}; for (const e of today) for (const m of e.missing) miss[m] = (miss[m] || 0) + 1;
-    const top = Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id, n]) => `${nameOf(id)} ×${n}`);
+    const miss = {}, names = {}; for (const e of today) for (const m of e.missing) { miss[m] = (miss[m] || 0) + 1; names[m] = nameOf(m, e); }
+    const top = Object.entries(miss).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id, n]) => `${names[id]} ×${n}`);
     return { today: today.length, ok, rate: today.length ? ok / today.length : null, alerts: today.length - ok, top, yest, byShift, hourly, shift: shiftOf(now) };
   }
 
@@ -519,7 +596,10 @@
   // it falls back to the simulated scene.
   const liveImg = $('#live');
   const served = /^http/.test(location.protocol);
-  const STREAM = `${location.protocol}//${location.hostname || 'localhost'}:8000/stream.mjpg`;
+  // On the Pi the browser reads JevCam's stream directly (:8000). On a laptop (localhost) there is
+  // no camera, so server.js relays the Pi's stream at /api/stream.mjpg (JEVCAM_URL points at the Pi).
+  const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const STREAM = isLocal ? '/api/stream.mjpg' : `${location.protocol}//${location.hostname}:8000/stream.mjpg`;
   const LOCK_SAMPLES = 2;   // Jev answers before a live entry's verdict locks (about 2 s)
   const CLEAR_MS = 4000;    // the gate must be empty this long before the next person counts
   let vision = null, camErr = false, lastSeq = -1, lastSeenAt = 0, liveTrack = null;
@@ -544,7 +624,7 @@
     camErr = !!v && !!v.error && /JevCam|camera/i.test(v.error);
     if (v && v.seq !== lastSeq) {
       lastSeq = v.seq;
-      try { onVision(v); } catch (err) { console.error('live vision:', err); feed.dataset.visionError = String((err && err.stack) || err); }
+      /* people are found by the in-browser detector; see detectLoop() */
     }
     $('#hudRes').textContent = liveMode()
       ? `LIVE · ${liveImg.naturalWidth}×${liveImg.naturalHeight} · JEV ${vision.error ? 'ERROR' : (vision.latency_ms || '–') + 'ms'}`
@@ -602,6 +682,139 @@
     const dx = (W - iw * s) / 2, dy = (H - ih * s) / 2, b = p.box;
     return { x: dx + b.left * iw * s, y: dy + b.top * ih * s, w: (b.right - b.left) * iw * s, h: (b.bottom - b.top) * ih * s,
       entry: liveTrack.entry || { worker: liveTrack.worker }, scanning: !liveTrack.entry };
+  }
+
+  // ------------------------------------------------------------------ multi-person live detection
+  // People are found in the browser (TensorFlow.js COCO-SSD) on the newest camera frame, tracked
+  // across frames by box overlap, and every scan interval each person's crop goes to /api/vision/check,
+  // which asks Jev one yes/no per active watch-list item. Box colour follows each person's last answers.
+  var detector = null, detLoading = false, detFailed = false, tracks = [], nextTrack = 1, lastBmp = null, frameW = 1280, frameH = 720, checking = false, lastCheck = 0;
+  const detCanvas = document.createElement('canvas');
+  function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.append(s); }); }
+  async function loadDetector() {
+    if (detector || detLoading || detFailed) return; detLoading = true;
+    try {
+      await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');
+      detector = await window.cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    } catch (e) { console.error('person detector failed to load', e); detFailed = true; } finally { detLoading = false; }
+  }
+  function iouN(a, b) {
+    const x0 = Math.max(a.left, b.left), y0 = Math.max(a.top, b.top), x1 = Math.min(a.right, b.right), y1 = Math.min(a.bottom, b.bottom);
+    const i = Math.max(0, x1 - x0) * Math.max(0, y1 - y0), ar = (r) => (r.right - r.left) * (r.bottom - r.top);
+    return i / (ar(a) + ar(b) - i || 1);
+  }
+  async function detectLoop() {
+    if (!liveMode()) { setTimeout(detectLoop, 1000); return; }
+    if (!detector) { loadDetector(); setTimeout(detectLoop, 400); return; }
+    try {
+      const r = await fetch('/api/vision/live.jpg', { cache: 'no-store' });
+      if (r.ok) {
+        const bmp = await createImageBitmap(await r.blob());
+        frameW = bmp.width; frameH = bmp.height;
+        detCanvas.width = frameW; detCanvas.height = frameH; detCanvas.getContext('2d').drawImage(bmp, 0, 0);
+        const preds = (await detector.detect(detCanvas, 20, 0.4)).filter((d) => d.class === 'person');
+        if (lastBmp) lastBmp.close(); lastBmp = bmp;
+        const now = Date.now(), used = new Set();
+        for (const d of preds) {
+          const b = { left: d.bbox[0] / frameW, top: d.bbox[1] / frameH, right: (d.bbox[0] + d.bbox[2]) / frameW, bottom: (d.bbox[1] + d.bbox[3]) / frameH };
+          let best = null, bi = 0.25;
+          for (const t of tracks) { if (used.has(t)) continue; const v = iouN(t.box, b); if (v > bi) { bi = v; best = t; } }
+          if (best) { for (const k of ['left', 'top', 'right', 'bottom']) best.box[k] = best.box[k] * 0.4 + b[k] * 0.6; best.lastSeen = now; used.add(best); }
+          else { const t = { id: nextTrack++, worker: pick(workers), box: b, lastSeen: now, samples: [], verdict: null, logged: null }; tracks.push(t); used.add(t); }
+        }
+        tracks = tracks.filter((t) => now - t.lastSeen < 1500);
+        if (!checking && now - lastCheck >= settings.scanSec * 1000) { lastCheck = now; checkPeople(); }
+      }
+    } catch (e) { /* camera hiccup: try again */ }
+    setTimeout(detectLoop, 120);
+  }
+  function cropOf(t) {
+    const b = t.box, pw = (b.right - b.left) * frameW, ph = (b.bottom - b.top) * frameH;
+    const x = Math.max(0, b.left * frameW - pw * 0.08), y = Math.max(0, b.top * frameH - ph * 0.08);
+    const w = Math.min(frameW - x, pw * 1.16), h = Math.min(frameH - y, ph * 1.16);
+    let s = Math.max(1, 320 / Math.min(w, h)); if (Math.max(w, h) * s > 1500) s = 1500 / Math.max(w, h);
+    const c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+    c.getContext('2d').drawImage(lastBmp, x, y, w, h, 0, 0, c.width, c.height);
+    t.cropRect = { x, y, w, h, box: { ...t.box } };
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+  }
+  async function checkPeople() {
+    const items = activeItems(new Date());
+    const live = tracks.filter((t) => Date.now() - t.lastSeen < 700);
+    if (!items.length) { for (const t of live) applySample(t, {}); return; }
+    if (!live.length || !lastBmp) return;
+    checking = true;
+    try {
+      const area = (t) => (t.box.right - t.box.left) * (t.box.bottom - t.box.top);
+      const batch = live.slice().sort((a, b) => area(b) - area(a)).slice(0, 10);
+      const people = batch.map((t) => ({ id: t.id, img: cropOf(t) }));
+      const r = await fetch('/api/vision/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ people }) });
+      if (r.ok) {
+        const { det, head } = await r.json();
+        for (const t of batch) {
+          // where the head sits across the person's box: from Jev's head box when it is confident, else centred
+          const hb = head && head[t.id], cr = t.cropRect;
+          if (hb && hb.conf >= 0.1 && cr) {
+            const cx = cr.x + ((hb.box.left + hb.box.right) / 2) * cr.w, bl = cr.box.left * frameW, bw = (cr.box.right - cr.box.left) * frameW;
+            t.headCx = Math.min(0.85, Math.max(0.15, (cx - bl) / bw));
+          }
+          if (det && det[t.id]) applySample(t, det[t.id]);
+        }
+      }
+    } catch (e) { console.error('check failed', e); } finally { checking = false; }
+  }
+  function applySample(t, det) {
+    t.samples.push(det); if (t.samples.length > 3) t.samples.shift();
+    const d = {};
+    for (const it of settings.items) {
+      const vals = t.samples.map((s) => s[it.id]).filter(Boolean).map((x) => x.conf);
+      if (vals.length) { const conf = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100; d[it.id] = { present: conf >= 0.5, conf, name: it.name }; }
+    }
+    const v = evaluate(d, new Date());
+    t.verdict = { worker: t.worker, det: d, ok: v.ok, missing: v.missing, severity: v.severity };
+    // log when a person's verdict first settles, and again whenever it changes
+    const settled = !activeItems(new Date()).length || t.samples.length >= 2;
+    if (settled && (!t.logged || t.logged.ok !== v.ok || t.logged.missing.join() !== v.missing.join())) {
+      const when = new Date();
+      const e = { id: Math.random().toString(36).slice(2, 9), ts: when, worker: t.worker, shift: shiftOf(when), det: d, ok: v.ok, missing: v.missing, severity: v.severity, seed: Math.random(), photo: null, pushed: null };
+      t.logged = e; e.photo = shot(e, headBox(t)); commit(e);
+    }
+  }
+  function shot(e, bx) {
+    if (!lastBmp) return null;
+    const c = document.createElement('canvas'); c.width = 960; c.height = 540; const ctx = c.getContext('2d');
+    ctx.drawImage(lastBmp, 0, 0, 960, 540);
+    drawBoxes(ctx, [{ x: bx.left * 960, y: bx.top * 540, w: (bx.right - bx.left) * 960, h: (bx.bottom - bx.top) * 540, entry: e, scanning: false, compact: true, short: true }], getComputedStyle(document.body).fontFamily);
+    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 514, 960, 26);
+    ctx.fillStyle = '#d9e2ec'; ctx.font = '500 13px ui-monospace, monospace'; ctx.fillText(`CAM 01 · ${settings.site} · ${e.ts.toLocaleString()} · ${e.worker}`, 10, 531);
+    return c.toDataURL('image/jpeg', 0.72);
+  }
+  // Head (or hat) box: a head-sized square at the top of the person's box, nudged sideways by Jev's head centre.
+  function headBox(t) {
+    const b = t.box, bw = (b.right - b.left) * frameW, bh = (b.bottom - b.top) * frameH;
+    const side = Math.max(24, Math.min(bw * 0.5, bh * 0.34, frameH * 0.3));
+    const cx = b.left * frameW + (t.headCx ?? 0.5) * bw, top = b.top * frameH - side * 0.08;
+    return { left: Math.max(0, (cx - side / 2) / frameW), right: Math.min(1, (cx + side / 2) / frameW), top: Math.max(0, top / frameH), bottom: Math.min(1, (top + side * 1.12) / frameH) };
+  }
+  function liveBoxes() {
+    const iw = liveImg.naturalWidth || frameW, ih = liveImg.naturalHeight || frameH, s = Math.max(W / iw, H / ih);
+    const dx = (W - iw * s) / 2, dy = (H - ih * s) / 2, compact = tracks.length > 3;
+    const want = settings.show;   // 'bad' = red only, 'ok' = green only, 'all' = both (and people still being checked)
+    return tracks.filter((t) => want === 'all' || (t.verdict && (want === 'ok' ? t.verdict.ok : !t.verdict.ok)))
+      .map((t) => { const hb = headBox(t); return { x: dx + hb.left * iw * s, y: dy + hb.top * ih * s, w: (hb.right - hb.left) * iw * s, h: (hb.bottom - hb.top) * ih * s,
+      entry: t.verdict || { worker: t.worker }, scanning: !t.verdict, compact: true, short: true }; });
+  }
+  function drawCount(ctx) {
+    if (!tracks.length && !detector) {
+      if (detLoading || detFailed) { ctx.font = `600 12px ${getComputedStyle(document.body).fontFamily}`; ctx.fillStyle = 'rgba(5,7,10,.75)'; rr(ctx, 12, 32, 210, 22, 6); ctx.fill(); ctx.fillStyle = '#f6c543'; ctx.fillText(detFailed ? 'Person detector unavailable (offline?)' : 'Loading person detector…', 20, 47); }
+      return;
+    }
+    const ok = tracks.filter((t) => t.verdict && t.verdict.ok).length, bad = tracks.filter((t) => t.verdict && !t.verdict.ok).length, scan = tracks.length - ok - bad;
+    const txt = `IN VIEW ${tracks.length}   ✓ ${ok}   ✗ ${bad}${scan ? `   ⟳ ${scan}` : ''}`;
+    ctx.font = `700 13px ${getComputedStyle(document.body).fontFamily}`; const w = ctx.measureText(txt).width + 20;
+    ctx.fillStyle = 'rgba(5,7,10,.78)'; rr(ctx, 12, 32, w, 24, 7); ctx.fill();
+    ctx.fillStyle = bad ? '#ff8a8a' : '#7ff0a8'; ctx.fillText(txt, 22, 49);
   }
   function size() {
     const r = feed.getBoundingClientRect(); const dpr = Math.min(2, devicePixelRatio || 1);
@@ -662,8 +875,11 @@
   // Worker figure in IR greys. Hi-vis and hard hat read as bright shapes; bare skin as mid grey.
   function worker(ctx, x, baseY, h, det, seed, ph) {
     const sw = Math.sin(ph * Math.PI * 2);
+    const has = (id) => !!(det[id] && det[id].present);
+    // any present item that sounds like headwear (a cap, a cup worn as a hat, a helmet) is drawn on the head
+    const headId = Object.keys(det).find((id) => id !== 'hardHat' && det[id].present && /hat|helmet|cap\b|cup|hood|beanie/i.test(det[id].name || ''));
     const skin = `rgb(${150 + seed * 50},${150 + seed * 50},${150 + seed * 50})`;
-    const shirt = det.vest.present ? '#e6eaee' : '#5f666d';
+    const shirt = has('vest') ? '#e6eaee' : '#5f666d';
     ctx.save(); ctx.translate(x, baseY); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     // legs + boots
     ctx.strokeStyle = '#80878e'; ctx.lineWidth = h * .075;
@@ -674,20 +890,20 @@
     // torso
     const top = -h * .82, th = h * .38, tw = h * .3;
     ctx.fillStyle = shirt; rr(ctx, -tw / 2, top, tw, th, h * .05); ctx.fill();
-    if (det.vest.present) { ctx.fillStyle = '#ffffff'; ctx.fillRect(-tw / 2, top + th * .38, tw, h * .028); ctx.fillRect(-tw / 2, top + th * .62, tw, h * .028); ctx.fillRect(-h * .02, top, h * .04, th); }
+    if (has('vest')) { ctx.fillStyle = '#ffffff'; ctx.fillRect(-tw / 2, top + th * .38, tw, h * .028); ctx.fillRect(-tw / 2, top + th * .62, tw, h * .028); ctx.fillRect(-h * .02, top, h * .04, th); }
     // arms + gloves
-    ctx.strokeStyle = det.vest.present ? '#c7ced5' : '#5f666d'; ctx.lineWidth = h * .06;
+    ctx.strokeStyle = has('vest') ? '#c7ced5' : '#5f666d'; ctx.lineWidth = h * .06;
     const ax = h * .19, ay = top + h * .04;
     ctx.beginPath(); ctx.moveTo(-tw / 2 + h * .02, ay); ctx.lineTo(-ax - sw * h * .07, top + th * .95); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(tw / 2 - h * .02, ay); ctx.lineTo(ax + sw * h * .07, top + th * .95); ctx.stroke();
-    ctx.fillStyle = det.gloves.present ? '#dfe4e9' : skin;
+    ctx.fillStyle = has('gloves') ? '#dfe4e9' : skin;
     ctx.beginPath(); ctx.arc(-ax - sw * h * .07, top + th * .98, h * .035, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(ax + sw * h * .07, top + th * .98, h * .035, 0, 7); ctx.fill();
     // custom watch-list items that are present: bright tags (armband, belt clip, chest badge)
     const spots = [[tw / 2 + h * .035, top + th * .3], [-tw / 2 - h * .035, top + th * .3], [0, top + th - h * .015], [h * .06, top + th * .18]];
     let k = 0;
     for (const id of Object.keys(det)) {
-      if (!det[id].present || ['hardHat', 'vest', 'glasses', 'gloves'].includes(id) || k >= spots.length) continue;
+      if (!det[id].present || id === headId || ['hardHat', 'vest', 'glasses', 'gloves'].includes(id) || k >= spots.length) continue;
       const [sx, sy] = spots[k++];
       ctx.fillStyle = '#ffffff'; rr(ctx, sx - h * .035, sy - h * .016, h * .07, h * .032, 3); ctx.fill();
       ctx.strokeStyle = '#1a1f24'; ctx.lineWidth = 1.5; ctx.stroke();
@@ -696,8 +912,8 @@
     ctx.fillStyle = skin; ctx.fillRect(-h * .025, top - h * .03, h * .05, h * .04);
     const hy = top - h * .105, hr = h * .082;
     ctx.beginPath(); ctx.arc(0, hy, hr, 0, 7); ctx.fill();
-    if (det.glasses.present) { ctx.fillStyle = '#14181c'; rr(ctx, -hr * .95, hy - hr * .3, hr * 1.9, hr * .38, 3); ctx.fill(); }
-    if (det.hardHat.present) {
+    if (has('glasses')) { ctx.fillStyle = '#14181c'; rr(ctx, -hr * .95, hy - hr * .3, hr * 1.9, hr * .38, 3); ctx.fill(); }
+    if (has('hardHat') || headId) {
       ctx.fillStyle = '#f5f7f9'; ctx.beginPath(); ctx.arc(0, hy - hr * .15, hr * 1.18, Math.PI, 0); ctx.closePath(); ctx.fill();
       rr(ctx, -hr * 1.5, hy - hr * .25, hr * 3, hr * .26, 3); ctx.fill();
     } else { ctx.fillStyle = '#2d3238'; ctx.beginPath(); ctx.arc(0, hy - hr * .18, hr * .98, Math.PI, 0); ctx.closePath(); ctx.fill(); }
@@ -717,14 +933,17 @@
       if (scanning) { // sweep line
         const sy = b.y + ((performance.now() / 6) % b.h); ctx.globalAlpha = .7; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(b.x + 2, sy); ctx.lineTo(b.x + b.w - 2, sy); ctx.stroke(); ctx.globalAlpha = 1;
       }
-      const label = scanning ? `${e.worker} · SCANNING` : e.ok ? `${e.worker} · ✓ COMPLIANT` : `${e.worker} · ✗ MISSING ${e.missing.map((m) => nameOf(m, e).toUpperCase()).join(', ')}`;
+      const reqNames = settings.items.filter((i) => activeOn(i, new Date())).map((i) => i.name.toUpperCase());
+      const label = b.short
+        ? (scanning ? 'CHECKING…' : e.ok ? `✓ ${reqNames.join(' + ') || 'OK'}` : `✗ NO ${e.missing.map((m) => nameOf(m, e).toUpperCase()).join(', ')}`)
+        : scanning ? `${e.worker} · SCANNING` : e.ok ? `${e.worker} · ✓ COMPLIANT` : `${e.worker} · ✗ MISSING ${e.missing.map((m) => nameOf(m, e).toUpperCase()).join(', ')}`;
       const cw = ctx.canvas.width / (ctx.getTransform().a || 1);
       ctx.font = `700 12px ${font}`; const tw = ctx.measureText(label).width + 16;
       const ly = b.y - 26 < 6 ? b.y + b.h + 6 : b.y - 26;
       const lx0 = Math.max(6, Math.min(b.x, cw - tw - 6));
       ctx.fillStyle = color; rr(ctx, lx0, ly, tw, 20, 5); ctx.fill();
       ctx.fillStyle = '#0a0c10'; ctx.fillText(label, lx0 + 8, ly + 14);
-      if (!scanning) {
+      if (!scanning && !b.compact) {
         let yy = b.y + 6; ctx.font = `600 11.5px ${font}`;
         const lines = tickLines(e);
         const colW = Math.max(0, ...lines.map((l) => ctx.measureText(l.txt).width + 12));
@@ -759,10 +978,11 @@
       if (!wk.locked && p >= LOCK_AT) { wk.locked = true; commit(wk.entry); }
       if (!live && p > 0.06) boxes.push({ ...box(x, baseY, h), entry: wk.entry, scanning: !wk.locked });
     }
-    if (live) { const b = liveBox(); if (b) boxes.push(b); }
+    if (live) boxes.push(...liveBoxes());
     else post(sctx, W, H, frame);
     octx.clearRect(0, 0, W, H);
     drawBoxes(octx, boxes, getComputedStyle(document.body).fontFamily);
+    if (live) drawCount(octx);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -829,11 +1049,23 @@
     const v = $('#verdict'); v.className = 'verdict ' + (mode === 'scan' ? 'scan' : e ? (e.ok ? 'ok' : 'bad') : '');
     if (!e) { $('#vIc').textContent = '·'; $('#vT').textContent = 'Gate clear'; $('#vD').textContent = 'Waiting for the next worker'; $('#vItems').replaceChildren(); return; }
     if (mode === 'scan') { $('#vIc').textContent = '⟳'; $('#vT').textContent = 'Worker approaching'; $('#vD').textContent = `${e.worker} · checking PPE…`; $('#vItems').replaceChildren(); return; }
+    selected = e;
+    const lines = tickLines(e), req = lines.filter((l) => l.req), okN = req.filter((l) => !l.miss).length;
     $('#vIc').textContent = e.ok ? '✓' : '✗';
     $('#vT').textContent = e.ok ? 'Compliant' : 'Non-compliant';
-    $('#vD').textContent = e.ok ? `${e.worker} · ${hhmmss(e.ts)} · all required PPE detected` : `${e.worker} · ${hhmmss(e.ts)} · missing ${e.missing.map((m) => nameOf(m, e)).join(', ')}`;
-    $('#vItems').replaceChildren(...tickLines(e).map((l) =>
-      el('span', { class: `item ${!l.req ? 'off' : l.miss ? 'bad' : 'ok'}`, title: `${Math.round(l.conf * 100)}% confidence` }, el('b', { text: !l.req ? '·' : l.miss ? '✗' : '✓' }), document.createTextNode(l.name))));
+    const tail = e.amended ? ' · amended by supervisor' : '';
+    $('#vD').textContent = e.ok
+      ? `${e.worker} · ${hhmmss(e.ts)} · ${req.length ? `${okN} of ${req.length} required items present` : 'nothing is required today, the watch list is empty'}${tail}`
+      : `${e.worker} · ${hhmmss(e.ts)} · missing ${e.missing.map((m) => nameOf(m, e)).join(', ')} · ${okN} of ${req.length} required items present${tail}`;
+    $('#vItems').replaceChildren(...lines.map((l) => {
+      const chip = el('span', { class: `item ${!l.req ? 'off' : l.miss ? 'bad' : 'ok'}${l.req ? ' click' : ''}`, role: l.req ? 'button' : null, tabindex: l.req ? 0 : null,
+        title: l.req ? `${Math.round(l.conf * 100)}% confidence · click to mark as ${l.miss ? 'present' : 'missing'} after a manual check` : 'Not required today' },
+        el('b', { text: !l.req ? '·' : l.miss ? '✗' : '✓' }), document.createTextNode(l.name));
+      if (l.amended) chip.append(el('span', { class: 'am', text: 'amended' }));
+      if (l.req) { chip.addEventListener('click', () => amend(e, l.id)); chip.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); amend(e, l.id); } }); }
+      return chip;
+    }));
+    document.querySelectorAll('#list .row-e').forEach((r) => r.classList.toggle('sel', r.dataset.id === e.id));
   }
 
   const ringColor = (r) => r == null ? 'rgba(255,255,255,.2)' : r >= .9 ? 'var(--good)' : r >= .75 ? 'var(--warning)' : 'var(--critical)';
@@ -867,13 +1099,17 @@
   function renderList() {
     const list = $('#list'); const recent = entries.slice(-40).reverse();
     const nodes = recent.map((e) => {
-      const row = el('div', { class: `row-e ${e.ok ? 'ok' : 'bad ' + (e.severity || 'critical')}`, 'data-id': e.id });
+      const row = el('div', { class: `row-e ${e.ok ? 'ok' : 'bad ' + (e.severity || 'critical')}${selected === e ? ' sel' : ''}`, 'data-id': e.id, title: 'Click to review this entry in the verdict panel' });
       if (!rendered.has(e.id)) rendered.add(e.id); else row.style.animation = 'none';
       const names = e.missing.map((m) => nameOf(m, e)).join(', ');
-      const ic = e.ok ? el('div', { class: 'ic', text: '✓' }) : el('img', { class: 'ic', src: still(e), alt: `Snapshot of ${e.worker}`, onclick: () => { const lb = $('#lightbox'); lb.querySelector('img').src = still(e); lb.querySelector('.cap').textContent = `${e.worker} · ${e.ts.toLocaleString()} · missing ${names}`; lb.classList.add('open'); } });
+      const ic = e.ok ? el('div', { class: 'ic', text: '✓' }) : el('img', { class: 'ic', src: still(e), alt: `Snapshot of ${e.worker}`, onclick: (ev) => { ev.stopPropagation(); const lb = $('#lightbox'); lb.querySelector('img').src = still(e); lb.querySelector('.cap').textContent = `${e.worker} · ${e.ts.toLocaleString()} · missing ${names}`; lb.classList.add('open'); } });
       const t = el('div', { class: 't', text: hhmm(e.ts) });
       if (e.pushed === 'sent') t.append(el('span', { class: 'pushed', text: '📱 pushed' }));
-      row.append(ic, el('div', {}, el('div', { class: 'w', text: e.worker }), el('div', { class: 'm', text: e.ok ? 'All required PPE detected' : `Missing ${names}${e.severity === 'warning' ? ' · warning' : ''}` })), t);
+      const w = el('div', { class: 'w', text: e.worker });
+      if (e.amended) w.append(document.createTextNode(' '), el('span', { class: 'am', text: 'amended' }));
+      const mini = el('div', { class: 'mini' }, ...tickLines(e).filter((l) => l.req).map((l) => el('i', { class: l.miss ? 'bad' : 'ok', text: `${l.miss ? '✗' : '✓'} ${l.name}` })));
+      row.append(ic, el('div', {}, w, el('div', { class: 'm', text: e.ok ? 'All required PPE detected' : `Missing ${names}${e.severity === 'warning' ? ' · warning' : ''}` }), mini), t);
+      row.addEventListener('click', () => showVerdict(e));
       return row;
     });
     list.replaceChildren(...nodes);
@@ -884,27 +1120,57 @@
   const on = (n) => n.getAttribute('aria-checked') === 'true';
   const setOn = (n, v) => n.setAttribute('aria-checked', v ? 'true' : 'false');
   function reapply() {
-    for (const e of entries) { const v = evaluate(e.det, e.ts); e.ok = v.ok; e.missing = v.missing; e.severity = v.severity; e.photo = null; }
-    $('#siteName').textContent = settings.site; saveSettings(); syncVision(); render(); if (lastEntry) showVerdict(lastEntry);
+    for (const t of tracks) { t.samples = []; t.verdict = null; t.logged = null; } lastCheck = 0;
+    for (const e of entries) { if (e.sealed) continue; const v = evaluate(e.det, e.ts, e.override); e.ok = v.ok; e.missing = v.missing; e.severity = v.severity; e.photo = null; }
+    $('#siteName').textContent = settings.site; saveSettings(); syncVision(); render(); const show = selected || lastEntry; if (show) showVerdict(show);
   }
 
   // ------------------------------------------------------------------ watch list card
   let editing = null;
   const form = { sev: 'critical', sched: 'daily', dates: [] };
   function renderWatch() {
-    $('#wl').replaceChildren(...settings.items.map((it) => {
-      const st = itemStatus(it);
-      const row = el('div', { class: `wi ${it.on ? '' : 'off'}` });
-      const t = el('button', { class: 'toggle sm', role: 'switch', 'aria-checked': String(!!it.on), 'aria-label': `Enable ${it.name}` });
+    const now = new Date();
+    // required-today items first, so what counts right now is always at the top
+    const ordered = [...settings.items].sort((a, b) => Number(activeOn(b, now)) - Number(activeOn(a, now)));
+    $('#wl').replaceChildren(...ordered.map((it) => {
+      const st = itemStatus(it); const req = activeOn(it, now);
+      const row = el('div', { class: `wi ${it.on ? '' : 'off'}${req ? ' req' : ''}` });
+      const t = el('button', { class: 'toggle sm', role: 'switch', 'aria-checked': String(!!it.on), 'aria-label': `Require ${it.name}`, title: it.on ? 'Click to stop requiring this item' : 'Click to require this item' });
       t.addEventListener('click', () => { it.on = !it.on; reapply(); });
-      const mid = el('div', {}, el('div', { class: 'n', text: it.name }, el('span', { class: `tag ${it.severity}`, text: it.severity })), el('div', { class: `st ${st.cls}`, text: `${st.text} · ${scheduleWords(it)}` }));
-      const act = el('div', { class: 'act' }, el('button', { title: 'Edit', 'aria-label': `Edit ${it.name}`, text: '✎', onclick: () => openForm(it) }));
-      if (!it.builtin) act.append(el('button', { title: 'Remove', 'aria-label': `Remove ${it.name}`, text: '✕', onclick: () => { settings.items = settings.items.filter((x) => x !== it); if (editing === it) closeForm(); reapply(); } }));
+      const tag = el('button', { class: `tag ${it.severity}`, text: it.severity, title: `Click to switch to ${it.severity === 'critical' ? 'warning' : 'critical'}`, 'aria-label': `${it.name} severity: ${it.severity}, click to change` });
+      tag.addEventListener('click', () => { it.severity = it.severity === 'critical' ? 'warning' : 'critical'; reapply(); });
+      const mid = el('div', {}, el('div', { class: 'n', text: it.name }, tag), el('div', { class: `st ${st.cls}`, text: `${st.text} · ${scheduleWords(it)}` }));
+      const act = el('div', { class: 'act' },
+        el('button', { title: 'Edit name, camera description or schedule', 'aria-label': `Edit ${it.name}`, text: '✎', onclick: () => openForm(it) }),
+        el('button', { title: 'Remove', 'aria-label': `Remove ${it.name}`, text: '✕', onclick: () => { settings.items = settings.items.filter((x) => x !== it); if (editing === it) closeForm(); reapply(); } }));
       row.append(t, mid, act); return row;
     }));
-    const n = activeItems(new Date()).length;
-    $('#watchSub').textContent = `${n} required today`;
+    const n = activeItems(now).length, off = settings.items.filter((i) => !i.on).length;
+    $('#watchSub').textContent = settings.items.length ? `${n} required today${off ? ` · ${off} off` : ''}` : 'Nothing required yet';
+    // one-tap suggestions for standard PPE not on the list yet
+    const left = CATALOG.filter((c) => !settings.items.some((i) => i.id === c.id));
+    $('#suggest').replaceChildren(...(left.length ? [el('span', { class: 'lbl', text: settings.items.length ? 'Add:' : 'Start with:' }), ...left.map((c) => el('button', { type: 'button', text: `+ ${c.name}`, onclick: () => addItem(c.name) }))] : []));
   }
+  // The one way to add: a name, one item at a time. Standard PPE names pick up the matching
+  // catalog entry (description, severity, figure); anything else becomes a custom item.
+  function addItem(raw) {
+    const name = raw.trim(); if (!name) return;
+    const existing = settings.items.find((i) => i.name.toLowerCase() === name.toLowerCase());
+    if (existing) { existing.on = true; reapply(); return; }
+    const cat = CATALOG.find((c) => c.match.test(name) && !settings.items.some((i) => i.id === c.id));
+    const desc = /^(a|an|the)\s/i.test(name) ? name.toLowerCase() : `a ${name.toLowerCase()}`;
+    settings.items.push(cat
+      ? { id: cat.id, name, desc: name.toLowerCase() === cat.name.toLowerCase() ? cat.desc : desc, severity: cat.severity, on: true, builtin: false, schedule: { type: 'daily' } }
+      : { id: 'c_' + Math.random().toString(36).slice(2, 8), name, desc, severity: 'warning', on: true, builtin: false, schedule: { type: 'daily' } });
+    reapply();
+    const row = [...document.querySelectorAll('#wl .wi .n')].find((n) => n.firstChild && n.firstChild.textContent === name);
+    if (row) row.closest('.wi').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  $('#qadd').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const input = $('#qaddName'); addItem(input.value);
+    input.value = ''; input.blur();   // blur so the C / N / S demo keys work again right away
+  });
   function openForm(it) {
     editing = it || null;
     form.sev = it ? it.severity : 'critical'; form.sched = it ? (it.schedule || {}).type || 'daily' : 'daily'; form.dates = it && it.schedule && it.schedule.dates ? [...it.schedule.dates] : [];
@@ -926,7 +1192,6 @@
   $('#wfSched').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) { form.sched = b.dataset.v; syncForm(); } });
   $('#wfAddDate').addEventListener('click', () => { const k = $('#wfDate').value; if (k && !form.dates.includes(k)) { form.dates.push(k); form.dates.sort(); syncForm(); } });
   $('#wfCancel').addEventListener('click', closeForm);
-  $('#btnAddItem').addEventListener('click', () => openForm(null));
   $('#wfSave').addEventListener('click', () => {
     const err = $('#wfErr'); const name = $('#wfName').value.trim(), desc = $('#wfDesc').value.trim();
     if (!name) { err.textContent = 'Give the item a name.'; $('#wfName').focus(); return; }
@@ -954,7 +1219,7 @@
     $('#scanSec').value = settings.scanSec; scanHelp();
   }
   function scanHelp() { const n = settings.scanSec; $('#scanHelp').textContent = n === 1 ? 'Checks the camera every second. Fastest alerts, highest CPU load on the Pi.' : `Checks the camera every ${n} seconds.${n >= 10 ? ' A worker can walk through the gate between checks.' : ''}`; $('#hudScan').textContent = `SCAN ${n}s`; }
-  function setScan(v) { settings.scanSec = clampScan(v); saveSettings(); scanHelp(); schedule(); }
+  function setScan(v) { settings.scanSec = clampScan(v); settings.scanSet = true; saveSettings(); scanHelp(); schedule(); }
   $('#pushOn').addEventListener('click', () => { setOn($('#pushOn'), !on($('#pushOn'))); settings.push.on = on($('#pushOn')); saveSettings(); });
   $('#soundOn').addEventListener('click', () => { setOn($('#soundOn'), !on($('#soundOn'))); settings.sound = on($('#soundOn')); saveSettings(); });
   $('#pushTopic').addEventListener('input', (ev) => { settings.push.topic = ev.target.value.trim(); saveSettings(); });
@@ -982,6 +1247,10 @@
 
   size(); seed(); $('#siteName').textContent = settings.site; scanHelp(); render(); showVerdict(null);
   connectStream(); syncVision(); pollVision(); setInterval(pollVision, 700);
+  if (served) detectLoop();
+  function syncShow() { document.querySelectorAll('#showSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === settings.show))); }
+  document.querySelectorAll('#showSeg button').forEach((b) => b.addEventListener('click', () => { settings.show = b.dataset.v; saveSettings(); syncShow(); }));
+  syncShow();
   setTimeout(() => { if (liveMode()) schedule(); else spawn(); }, 4000);
 })();
 </script>

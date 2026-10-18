@@ -12,13 +12,11 @@ Open `index.html` in a browser. No server, no build.
 3. **Press `N`.** A non-compliant worker enters: the box locks red, the feed
    flashes, a banner names the missing item, and the entry lands at the top of
    *Live entries* with an evidence snapshot (click it to enlarge).
-4. **Watch list.** The card on the right lists what the camera checks for.
-   The four built-ins (hard hat, vest, glasses, gloves) can be toggled; **+ Add
-   item** adds anything else, e.g. "Red visitor helmet", with a plain-words
-   description, a severity, and a schedule (daily, specific days, or a date
-   range). An item scheduled for today is required right away: press `N` and
-   the next worker is checked for it too. Entries recorded before an item
-   existed are never retro-flagged.
+4. **Watch list.** It starts empty. Type what workers must wear, e.g.
+   "White hard hat", press Enter, and add the next one the same way (or tap a
+   suggestion chip). Each item is required right away: press `N` and the next
+   worker is checked for it. Click a red ✗ chip under the verdict to amend it
+   after a manual check.
 5. **Press `S`.** Settings: alert sensitivity, phone push (ntfy), camera scan
    interval and sound. Changes apply instantly and re-score today's entries.
 
@@ -44,11 +42,32 @@ the drawn scene and simulated workers.
 
 ## Watch list
 
-The *Watch list* card lists what the camera checks for. The four built-in PPE
-items stay; **+ Add item** adds any wearable (name, what the camera should look
-for, severity, on/off, and a schedule: every day, specific days or a date
-range). Only items active today count, and today's entries are re-scored when
-the list changes. On the Pi the description is what gets sent to the detector.
+The *Watch list* card is the single source of what counts as compliant, and it
+**starts empty**. There is one way to add: type what workers must wear in the
+box and press Enter, one item at a time. Standard PPE (hard hat, vest, glasses,
+gloves) also shows as one-tap suggestions until it is on the list.
+
+- Every row says **Required today** (green) or **Not required** (grey).
+- **Switch** turns an item on or off. **Tap the CRITICAL / WARNING tag** to
+  flip severity. **✎** edits the name, camera description or schedule (every
+  day, specific days, a date range). **✕** removes it.
+- On the Pi the item's description (e.g. "a white cup") goes verbatim to the
+  vision model.
+- Today's live entries are re-scored whenever the list changes. The seeded
+  history behind the morning's numbers was recorded against the standard set
+  and keeps its verdicts.
+
+Example: add *White cup* only. A worker wearing a white cup passes; one without
+it is flagged "Missing White cup · warning".
+
+## Compliance per worker
+
+The verdict panel shows one chip per required item: green **✓** present, red
+**✗ MISSING**, grey for items not required today. **Click a chip to amend the
+verdict** after a manual check (missing → present, or the reverse); the entry
+is marked *amended by supervisor* and the stats update. Click any row in *Live
+entries* to bring it back into the verdict panel and amend it there. Each row
+also carries its own ✓/✗ strip per required item.
 
 ## Putting it on pi-07
 
