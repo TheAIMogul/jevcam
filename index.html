@@ -39,13 +39,19 @@
     animation:pulse 1.4s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
   .feed .leds{position:absolute;top:10px;right:10px;display:flex;gap:8px}
-  .feed .leds span{display:flex;align-items:center;gap:7px;background:rgba(0,0,0,.55);color:#fff;
-    font-size:11px;font-weight:700;letter-spacing:.08em;padding:5px 10px;border-radius:20px;backdrop-filter:blur(4px)}
-  .led{width:10px;height:10px;border-radius:50%;background:#3a3f47;display:inline-block}
-  .led.jev.blink{animation:blinkjev .8s ease-out}
-  .led.frm.blink{animation:blinkfrm .8s ease-out}
-  @keyframes blinkjev{0%{background:#34d399;box-shadow:0 0 12px 4px #34d399}100%{background:#3a3f47;box-shadow:none}}
-  @keyframes blinkfrm{0%{background:#60a5fa;box-shadow:0 0 12px 4px #60a5fa}100%{background:#3a3f47;box-shadow:none}}
+  .feed .leds span{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6);color:#fff;
+    font-size:13px;font-weight:800;letter-spacing:.08em;padding:7px 13px;border-radius:22px;backdrop-filter:blur(4px)}
+  .led{width:15px;height:15px;border-radius:50%;display:inline-block;border:2px solid rgba(255,255,255,.35)}
+  .led.jev{background:#14532d}
+  .led.frm{background:#1e3a8a}
+  .led.jev.blink{animation:blinkjev 1s ease-out}
+  .led.frm.blink{animation:blinkfrm 1s ease-out}
+  .leds span.pj.blink{animation:pilljev 1s ease-out}
+  .leds span.pf.blink{animation:pillfrm 1s ease-out}
+  @keyframes blinkjev{0%{background:#4ade80;box-shadow:0 0 18px 7px #4ade80}100%{background:#14532d;box-shadow:none}}
+  @keyframes blinkfrm{0%{background:#60a5fa;box-shadow:0 0 18px 7px #60a5fa}100%{background:#1e3a8a;box-shadow:none}}
+  @keyframes pilljev{0%{background:rgba(22,163,74,.9)}100%{background:rgba(0,0,0,.6)}}
+  @keyframes pillfrm{0%{background:rgba(37,99,235,.9)}100%{background:rgba(0,0,0,.6)}}
   .feed .offline{position:absolute;inset:0;display:none;flex-direction:column;gap:10px;
     align-items:center;justify-content:center;background:rgba(10,11,13,.82);color:#fff;text-align:center;padding:20px}
   .feed.off .offline{display:flex}
@@ -138,8 +144,8 @@
       <img id="frame" alt="camera feed">
       <span class="live"><i></i>LIVE</span>
       <div class="leds">
-        <span title="Blinks on each Jev response"><i class="led jev" id="ledJev"></i>JEV</span>
-        <span title="Blinks on each new frame"><i class="led frm" id="ledFrame"></i>FRAME</span>
+        <span class="pj" title="Blinks on each Jev response"><i class="led jev" id="ledJev"></i>JEV</span>
+        <span class="pf" title="Blinks on each new frame"><i class="led frm" id="ledFrame"></i>FRAME</span>
       </div>
       <span class="badge" id="fbadge">&nbsp;</span>
       <div class="offline">
@@ -311,7 +317,9 @@ function refreshImg(){
 }
 // indicator lights
 let lastJev = null, lastFrame = null;
-function blink(el){ el.classList.remove("blink"); void el.offsetWidth; el.classList.add("blink"); }
+function blink(el){
+  [el, el.parentElement].forEach(n=>{ n.classList.remove("blink"); void n.offsetWidth; n.classList.add("blink"); });
+}
 $("#frame").addEventListener("load", ()=>blink($("#ledFrame")));
 
 function updateAlarm(al){
