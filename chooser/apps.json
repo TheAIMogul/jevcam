@@ -8,7 +8,9 @@
     "port": 8000,
     "health": "/api/state",
     "accent": "#2563eb",
-    "icon": "🎯"
+    "icon": "🎯",
+    "image": "card_jevcam.webp",
+    "imagePos": "72% 28%"
   },
   {
     "id": "app2",
@@ -19,6 +21,8 @@
     "port": 3001,
     "health": "/api/health",
     "accent": "#d97706",
-    "icon": "⛑️"
+    "icon": "⛑️",
+    "image": "card_ppe.webp",
+    "imagePos": "28% 22%"
   }
 ]

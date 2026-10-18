@@ -63,5 +63,20 @@ def run(name, aspect, src, prompt):
     print(f"saved {name} ({time.time() - t:.0f}s)")
 
 
-for job in JOBS:
+STYLE = ("Illustrated in the style of a classic open-world crime game loading screen from the 2000s Vice City era: "
+         "bold black ink outlines, cel-shaded comic-book shading, saturated sunset palette of hot pink, orange, "
+         "teal and purple, dramatic low angle. No text, no letters, no logos, no watermark, no real people.")
+CARD_JOBS = [
+    ("card_jevcam", "16:9", None,
+     "A sleek white security camera with a glowing red lens mounted on the corner of a pastel Art Deco hotel on "
+     "Ocean Drive, Miami Beach, at sunset, scanning the street below, palm trees, neon signs glowing, a vintage "
+     "convertible cruising past. " + STYLE),
+    ("card_ppe", "16:9", None,
+     "A confident construction worker in a bright yellow hard hat, high-visibility orange safety vest, safety "
+     "glasses and work gloves, standing at the gate of a Miami high-rise construction site at sunset, tower cranes "
+     "and the downtown skyline behind, palm trees. " + STYLE),
+]
+
+import sys
+for job in (CARD_JOBS if "cards" in sys.argv else JOBS):
     run(*job)
