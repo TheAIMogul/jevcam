@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JevCam Anatomy</title>
+<style>
+  :root {
+    --bg: #0c0e10; --card: #14171a; --line: #262b30; --text: #c9ced3; --muted: #7d858d; --strong: #f2f4f5;
+    --pcb: #1d5c37; --pcb-hi: #2a7a4b; --chip: #1a1d20; --metal: #9aa3ab;
+    --jev: #2d72d2; --jev-soft: #2d72d222; --red: #ff5a5f; --green: #3fcf8e; --amber: #f2b33d;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { width: min(1360px, 100% - 32px); margin: 36px auto 64px; }
+  header h1 { margin: 0 0 6px; font-size: 22px; color: var(--strong); letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 90ch; }
+  .shared { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 22px; }
+  .chip { font: 12px/1 var(--mono); padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); background: var(--card); }
+  .chip b { color: var(--strong); font-weight: 600; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 1080px) { .duo { grid-template-columns: 1fr; } }
+  .app { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .app-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 18px 0; }
+  .app-head h2 { margin: 0; font-size: 17px; color: var(--strong); }
+  .app-head .port { font: 12px var(--mono); color: var(--muted); }
+  .app-head .tag { display: block; font-size: 13px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .live { font: 12px var(--mono); color: var(--text); padding: 8px 18px 0; min-height: 26px; font-variant-numeric: tabular-nums; }
+  .live .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 6px; vertical-align: 1px; }
+  svg { display: block; width: 100%; height: auto; }
+  .lbl { font: 600 11.5px system-ui, sans-serif; fill: var(--strong); }
+  .sub { font: 10.5px var(--mono); fill: var(--muted); }
+  .tiny { font: 9.5px var(--mono); fill: var(--muted); }
+  .q { font: 10.5px var(--mono); fill: var(--text); }
+  .wire { fill: none; stroke: #3a4249; stroke-width: 2; }
+  .wire-fast { fill: none; stroke: var(--metal); stroke-width: 1.6; stroke-dasharray: 3 5; animation: flow .4s linear infinite; }
+  .wire-jev { fill: none; stroke: var(--jev); stroke-width: 1.8; stroke-dasharray: 5 4; opacity: .75; }
+  .wire-out { fill: none; stroke: #4a535b; stroke-width: 1.6; }
+  @keyframes flow { to { stroke-dashoffset: -16; } }
+  .parts { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--line); }
+  @media (max-width: 620px) { .parts { grid-template-columns: 1fr; } }
+  .part { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .part:nth-child(odd) { border-right: 1px solid var(--line); }
+  @media (max-width: 620px) { .part:nth-child(odd) { border-right: 0; } }
+  .part h3 { margin: 0 0 3px; font-size: 13px; color: var(--strong); display: flex; align-items: center; gap: 7px; }
+  .part h3 i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex: none; }
+  .part p { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .part code { font: 11.5px var(--mono); color: var(--text); }
+  .flow { padding: 14px 18px 18px; font-size: 13px; color: var(--muted); }
+  .flow ol { margin: 0; padding-left: 20px; }
+  .flow li { margin: 3px 0; }
+  .flow b { color: var(--text); }
+  footer { margin-top: 22px; color: var(--muted); font-size: 12.5px; }
+  footer code { font: 12px var(--mono); color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>JevCam anatomy · two apps on one Pi</h1>
+    <p>Both apps share one Raspberry Pi 4, one NoIR camera and one model, TypeSafe Jev. Neither streams video to Jev: the browser gets the full 20 fps, and once a second the newest frame goes to Jev with typed questions. The difference is the questions each app asks and what it does with the answers.</p>
+  </header>
+
+  <div class="shared">
+    <span class="chip"><b>Pi 4 Model B</b> · 4 GB · Debian 13 · kiosk</span>
+    <span class="chip"><b>Camera Module 2 NoIR</b> · IMX219 · 15-pin ribbon</span>
+    <span class="chip"><b>rpicam-vid</b> · 1280×720 MJPEG · 20 fps · q70</span>
+    <span class="chip"><b>Jev</b> · jev-preview (jev-1.14.0) · api.typesafe.ai/v1/systemone</span>
+    <span class="chip"><b>Chooser</b> · :8080 · boots full-screen</span>
+  </div>
+
+  <div class="duo">
+
+    <!-- ================================================================ APP 1 -->
+    <section class="app" id="app1">
+      <div class="app-head">
+        <h2>🎯 App 1 · JevCam<span class="tag">Type what to look for. Jev finds it.</span></h2>
+        <span class="port">Flask · :8000</span>
+      </div>
+      <div class="live" id="live1"><span class="dot"></span>starting…</div>
+      <svg viewBox="0 0 630 470" role="img" aria-label="JevCam architecture: camera to Pi, Pi streams 20 fps to the dashboard and sends one frame a second to Jev, Jev's answers drive boxes and the alarm.">
+        <defs>
+          <linearGradient id="pcb1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a7a4b"/><stop offset="1" stop-color="#1d5c37"/></linearGradient>
+          <linearGradient id="jevg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2f4d"/><stop offset="1" stop-color="#132238"/></linearGradient>
+          <path id="p1-frame" d="M232 270 C300 270 300 120 372 120"/>
+          <path id="p1-answer" d="M372 140 C320 140 320 290 232 290"/>
+        </defs>
+
+        <!-- camera -->
+        <g transform="translate(46 34)">
+          <rect x="0" y="0" width="86" height="86" rx="6" fill="url(#pcb1)" stroke="#123d24"/>
+          <circle cx="7" cy="7" r="3" fill="#0c0e10"/><circle cx="79" cy="7" r="3" fill="#0c0e10"/><circle cx="7" cy="79" r="3" fill="#0c0e10"/><circle cx="79" cy="79" r="3" fill="#0c0e10"/>
+          <rect x="27" y="22" width="32" height="32" rx="3" fill="#1a1d20" stroke="#2c3238"/>
+          <circle cx="43" cy="38" r="11" fill="#050607" stroke="#3b434a" stroke-width="2"/>
+          <circle cx="39" cy="34" r="2.6" fill="#7aa7ff" opacity=".8"/>
+          <rect x="22" y="72" width="42" height="10" rx="1.5" fill="#d8d2c2"/>
+        </g>
+        <text class="lbl" x="146" y="58">NoIR Camera Module 2</text>
+        <text class="sub" x="146" y="74">IMX219 · no IR filter</text>
+        <text class="sub" x="146" y="88">sees in the dark with IR</text>
+
+        <!-- ribbon -->
+        <path d="M80 122 L80 168 Q80 178 92 178 L120 178 Q130 178 130 190 L130 206" fill="none" stroke="#d8d2c2" stroke-width="12" opacity=".85"/>
+        <path d="M80 122 L80 168 Q80 178 92 178 L120 178 Q130 178 130 190 L130 206" fill="none" stroke="#bdb6a4" stroke-width="12" stroke-dasharray="1 2.2" opacity=".5"/>
+        <text class="tiny" x="96" y="168">ribbon</text>
+
+        <!-- Pi -->
+        <g transform="translate(30 204)">
+          <rect x="0" y="0" width="202" height="134" rx="8" fill="url(#pcb1)" stroke="#123d24"/>
+          <g fill="#0c0e10"><circle cx="9" cy="9" r="4"/><circle cx="141" cy="9" r="4"/><circle cx="9" cy="125" r="4"/><circle cx="141" cy="125" r="4"/></g>
+          <rect x="16" y="112" width="120" height="14" rx="1.5" fill="#15181b"/>
+          <g fill="#c8a24a" id="gpio1"></g>
+          <rect x="88" y="4" width="38" height="8" rx="1" fill="#d8d2c2"/>
+          <rect x="56" y="38" width="38" height="38" rx="3" fill="#2a2e33" stroke="#4a5158"/>
+          <g stroke="#5c646c" stroke-width="2.4"><line x1="62" y1="42" x2="62" y2="72"/><line x1="69" y1="42" x2="69" y2="72"/><line x1="76" y1="42" x2="76" y2="72"/><line x1="83" y1="42" x2="83" y2="72"/><line x1="90" y1="42" x2="90" y2="72"/></g>
+          <rect x="104" y="44" width="26" height="30" rx="2" fill="#15181b"/>
+          <rect x="160" y="6" width="50" height="38" rx="3" fill="#aeb6bd" stroke="#6d757c"/>
+          <rect x="164" y="48" width="46" height="34" rx="3" fill="#aeb6bd" stroke="#6d757c"/>
+          <rect x="164" y="88" width="46" height="34" rx="3" fill="#aeb6bd" stroke="#6d757c"/>
+          <rect x="170" y="54" width="34" height="8" fill="#3b4148"/><rect x="170" y="68" width="34" height="8" fill="#3b4148"/>
+          <rect x="170" y="94" width="34" height="8" fill="#2d72d2"/><rect x="170" y="108" width="34" height="8" fill="#2d72d2"/>
+          <circle id="act1" cx="10" cy="100" r="3.2" fill="#3fcf8e" opacity=".25"/>
+          <circle cx="10" cy="90" r="3.2" fill="#ff5a5f" opacity=".85"/>
+        </g>
+        <text class="lbl" x="30" y="360">Raspberry Pi 4 · app.py</text>
+        <text class="sub" x="30" y="376">one long-lived rpicam-vid process</text>
+        <text class="sub" x="30" y="390">watchdog: no frame 3 s → restart</text>
+
+        <!-- Jev -->
+        <g transform="translate(372 24)">
+          <rect x="0" y="0" width="226" height="176" rx="10" fill="url(#jevg1)" stroke="#2d72d2"/>
+          <text class="lbl" x="14" y="22">TypeSafe Jev</text>
+          <text class="sub" x="14" y="37">typed answers, not text</text>
+          <circle id="jevlamp1" cx="206" cy="18" r="5" fill="#2d72d2" opacity=".25"/>
+          <rect x="12" y="48" width="202" height="38" rx="5" fill="#0f1a2b" stroke="#24406a"/>
+          <text class="tiny" x="20" y="62">noul · yes/no</text>
+          <text class="q" x="20" y="78">"Is a dog clearly visible?"</text>
+          <rect x="12" y="92" width="202" height="30" rx="5" fill="#0f1a2b" stroke="#24406a"/>
+          <text class="tiny" x="20" y="104">box</text>
+          <text class="q" x="20" y="117">"the dog" → box, 0–1 coords</text>
+          <!-- probability dial -->
+          <g transform="translate(46 164)">
+            <path d="M-26 0 A26 26 0 0 1 26 0" fill="none" stroke="#24406a" stroke-width="6" stroke-linecap="round"/>
+            <path id="dialfill1" d="M-26 0 A26 26 0 0 1 26 0" fill="none" stroke="#2d72d2" stroke-width="6" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+            <line x1="0" y1="-20" x2="0" y2="-32" stroke="#ff5a5f" stroke-width="2"/>
+            <line id="needle1" x1="0" y1="0" x2="0" y2="-20" stroke="#f2f4f5" stroke-width="2.2" stroke-linecap="round" transform="rotate(-88)"/>
+            <circle r="3.4" fill="#f2f4f5"/>
+          </g>
+          <text class="sub" x="96" y="146">presence</text>
+          <text id="pval1" x="96" y="168" style="font:600 22px var(--mono);fill:#f2f4f5">0.03</text>
+          <text class="tiny" x="160" y="168">≥ 0.5 = hit</text>
+        </g>
+
+        <!-- Pi -> Jev and back -->
+        <use href="#p1-frame" class="wire-jev"/>
+        <use href="#p1-answer" class="wire-jev" style="stroke:#7aa7ff"/>
+        <circle id="pulse1-out" r="5" fill="#f2f4f5" opacity="0"/>
+        <circle id="pulse1-in" r="5" fill="#7aa7ff" opacity="0"/>
+        <text class="sub" x="270" y="192" text-anchor="middle" style="fill:#7aa7ff">newest frame</text>
+        <text class="sub" x="270" y="206" text-anchor="middle" style="fill:#7aa7ff">1 per second</text>
+        <text class="tiny" x="356" y="232" text-anchor="end">200–500 ms back</text>
+
+        <!-- Pi -> dashboard (20 fps) -->
+        <path class="wire" d="M240 316 L330 316 Q342 316 342 328 L342 352"/>
+        <path class="wire-fast" d="M240 316 L330 316 Q342 316 342 328 L342 352"/>
+        <text class="sub" x="250" y="306">/stream.mjpg · 20 fps</text>
+
+        <!-- dashboard -->
+        <g transform="translate(292 352)">
+          <rect x="0" y="0" width="206" height="104" rx="7" fill="#0a0c0d" stroke="#3a4249" stroke-width="2"/>
+          <rect x="7" y="7" width="192" height="90" rx="3" fill="#161b1a"/>
+          <g id="scene1">
+            <rect x="0" y="60" width="192" height="30" fill="#1d2422" transform="translate(7 7)"/>
+          </g>
+          <g id="dog1" transform="translate(-40 0)">
+            <ellipse cx="0" cy="66" rx="17" ry="9" fill="#6b5a44"/>
+            <circle cx="16" cy="56" r="7" fill="#6b5a44"/>
+            <rect x="-14" y="70" width="4" height="14" fill="#6b5a44"/><rect x="8" y="70" width="4" height="14" fill="#6b5a44"/>
+          </g>
+          <g id="box1" opacity="0">
+            <rect x="-22" y="44" width="48" height="44" fill="none" stroke="#3fcf8e" stroke-width="2"/>
+            <rect x="-22" y="35" width="30" height="9" fill="#3fcf8e"/>
+            <text x="-19" y="42" style="font:700 7px var(--mono);fill:#0a0c0d">dog</text>
+          </g>
+          <g id="band1" opacity="0">
+            <rect x="7" y="7" width="192" height="20" fill="#ff5a5f"/>
+            <text x="103" y="21" text-anchor="middle" style="font:800 10px system-ui;fill:#fff;letter-spacing:.08em">🚨 THERE'S A DOG!</text>
+          </g>
+          <g id="bars1" transform="translate(12 92)"></g>
+        </g>
+        <text class="lbl" x="506" y="370">Dashboard</text>
+        <text class="sub" x="506" y="385">boxes drawn by</text>
+        <text class="sub" x="506" y="398">the browser, over</text>
+        <text class="sub" x="506" y="411">the live video</text>
+
+        <!-- alarm + voice -->
+        <path class="wire-out" d="M452 200 L452 268 Q452 278 462 278 L480 278"/>
+        <g transform="translate(482 252)">
+          <rect x="0" y="0" width="130" height="54" rx="8" fill="#1a1416" stroke="#5a2a2d"/>
+          <circle id="siren1" cx="22" cy="27" r="12" fill="#ff5a5f" opacity=".2"/>
+          <text class="lbl" x="40" y="22">Alarm</text>
+          <text class="tiny" x="40" y="36">≥0.5 · hold 6 s</text>
+          <text class="tiny" x="40" y="48">voice / 10 s</text>
+        </g>
+        <text class="tiny" x="482" y="322">🔊 ElevenLabs DJ voice</text>
+        <text class="tiny" x="482" y="336">/api/alert_audio · MP3</text>
+      </svg>
+
+      <div class="parts">
+        <div class="part"><h3><i style="background:var(--pcb-hi)"></i>Camera</h3><p>The NoIR IMX219 on the ribbon cable. Without an IR filter it sees in the dark with an IR light, and gives a pink tint in daylight.</p></div>
+        <div class="part"><h3><i style="background:var(--pcb-hi)"></i>Pi · camera owner</h3><p><code>rpicam-vid --codec mjpeg</code> uses the Pi's hardware JPEG encoder. JevCam re-broadcasts it as <code>/stream.mjpg</code> and <code>/latest.jpg</code> for any number of readers.</p></div>
+        <div class="part"><h3><i style="background:var(--jev)"></i>Jev · two questions per target</h3><p>Each target becomes a <code>noul</code> ("is it clearly visible?") plus a <code>box</code> ("the dog"). A box is drawn when presence ≥ 0.5 and box confidence ≥ 0.15.</p></div>
+        <div class="part"><h3><i style="background:var(--red)"></i>Alarm + voice</h3><p>When the alarm target hits, a band slides over the feed and the ElevenLabs radio-DJ voice shouts the phrase every 10 s. The alarm holds 6 s after the last hit, and a target only clears after 5 s, so nothing flickers.</p></div>
+      </div>
+      <div class="flow">
+        <ol>
+          <li><b>Camera → Pi:</b> one MJPEG stream, 1280×720 at 20 fps.</li>
+          <li><b>Pi → browser:</b> the stream goes out untouched. The video never waits on the model.</li>
+          <li><b>Pi → Jev:</b> a separate thread sends the newest frame once a second (interval 0.5–60 s, default 1).</li>
+          <li><b>Jev → Pi:</b> probabilities and 0–1 box coordinates come back in 200–500 ms and land in <code>/api/state</code>.</li>
+          <li><b>Pi → you:</b> boxes, the presence timeline, the event log, the 3D map, and the alarm and voice.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ================================================================ APP 2 -->
+    <section class="app" id="app2">
+      <div class="app-head">
+        <h2>⛑️ App 2 · PPE Monitor<span class="tag">Is every worker at the gate wearing their gear?</span></h2>
+        <span class="port">Node · :3001</span>
+      </div>
+      <div class="live" id="live2"><span class="dot"></span>starting…</div>
+      <svg viewBox="0 0 630 470" role="img" aria-label="PPE Monitor architecture: reads JevCam's latest frame, asks Jev headcount, box and per-item questions, locks a verdict after two answers, logs a snapshot and pushes alerts.">
+        <defs>
+          <linearGradient id="pcb2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a7a4b"/><stop offset="1" stop-color="#1d5c37"/></linearGradient>
+          <linearGradient id="jevg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2f4d"/><stop offset="1" stop-color="#132238"/></linearGradient>
+          <path id="p2-frame" d="M232 270 C300 270 300 120 372 120"/>
+          <path id="p2-answer" d="M372 140 C320 140 320 290 232 290"/>
+        </defs>
+
+        <!-- camera, owned by JevCam -->
+        <g transform="translate(46 34)" opacity=".55">
+          <rect x="0" y="0" width="86" height="86" rx="6" fill="url(#pcb2)" stroke="#123d24"/>
+          <circle cx="7" cy="7" r="3" fill="#0c0e10"/><circle cx="79" cy="7" r="3" fill="#0c0e10"/><circle cx="7" cy="79" r="3" fill="#0c0e10"/><circle cx="79" cy="79" r="3" fill="#0c0e10"/>
+          <rect x="27" y="22" width="32" height="32" rx="3" fill="#1a1d20" stroke="#2c3238"/>
+          <circle cx="43" cy="38" r="11" fill="#050607" stroke="#3b434a" stroke-width="2"/>
+          <rect x="22" y="72" width="42" height="10" rx="1.5" fill="#d8d2c2"/>
+        </g>
+        <text class="lbl" x="146" y="58">Same camera</text>
+        <text class="sub" x="146" y="74">PPE Monitor never opens it</text>
+        <text class="sub" x="146" y="88">(only one process can)</text>
+        <path d="M80 122 L80 168 Q80 178 92 178 L120 178 Q130 178 130 190 L130 206" fill="none" stroke="#d8d2c2" stroke-width="12" opacity=".45"/>
+
+        <!-- Pi with two processes -->
+        <g transform="translate(30 204)">
+          <rect x="0" y="0" width="202" height="134" rx="8" fill="url(#pcb2)" stroke="#123d24"/>
+          <g fill="#0c0e10"><circle cx="9" cy="9" r="4"/><circle cx="141" cy="9" r="4"/><circle cx="9" cy="125" r="4"/><circle cx="141" cy="125" r="4"/></g>
+          <rect x="16" y="112" width="120" height="14" rx="1.5" fill="#15181b"/>
+          <g fill="#c8a24a" id="gpio2"></g>
+          <rect x="88" y="4" width="38" height="8" rx="1" fill="#d8d2c2"/>
+          <rect x="16" y="22" width="70" height="40" rx="5" fill="#0d1411" stroke="#3a4a42"/>
+          <text x="51" y="38" text-anchor="middle" style="font:600 9.5px var(--mono);fill:#c9ced3">JevCam</text>
+          <text x="51" y="52" text-anchor="middle" class="tiny">:8000</text>
+          <rect x="16" y="70" width="70" height="36" rx="5" fill="#0d1411" stroke="#f2b33d"/>
+          <text x="51" y="86" text-anchor="middle" style="font:600 9.5px var(--mono);fill:#f2b33d">PPE node</text>
+          <text x="51" y="99" text-anchor="middle" class="tiny">:3001</text>
+          <path d="M51 62 L51 70" stroke="#f2b33d" stroke-width="2"/>
+          <text x="92" y="69" class="tiny" style="fill:#f2b33d">/latest.jpg</text>
+          <rect x="160" y="6" width="50" height="38" rx="3" fill="#aeb6bd" stroke="#6d757c"/>
+          <rect x="164" y="48" width="46" height="34" rx="3" fill="#aeb6bd" stroke="#6d757c"/>
+          <rect x="164" y="88" width="46" height="34" rx="3" fill="#aeb6bd" stroke="#6d757c"/>
+          <rect x="170" y="94" width="34" height="8" fill="#2d72d2"/><rect x="170" y="108" width="34" height="8" fill="#2d72d2"/>
+          <circle id="act2" cx="10" cy="100" r="3.2" fill="#3fcf8e" opacity=".25"/>
+          <circle cx="10" cy="90" r="3.2" fill="#ff5a5f" opacity=".85"/>
+        </g>
+        <text class="lbl" x="30" y="360">Raspberry Pi 4 · app2/server.js</text>
+        <text class="sub" x="30" y="376">reads JevCam's newest frame</text>
+        <text class="sub" x="30" y="390">asks Jev its own questions</text>
+
+        <!-- Jev -->
+        <g transform="translate(372 24)">
+          <rect x="0" y="0" width="226" height="176" rx="10" fill="url(#jevg2)" stroke="#2d72d2"/>
+          <text class="lbl" x="14" y="22">TypeSafe Jev</text>
+          <text class="sub" x="14" y="37">all questions in one round trip</text>
+          <circle id="jevlamp2" cx="206" cy="18" r="5" fill="#2d72d2" opacity=".25"/>
+          <rect x="12" y="46" width="202" height="30" rx="5" fill="#0f1a2b" stroke="#24406a"/>
+          <text class="tiny" x="20" y="58">noul · headcount</text>
+          <text class="q" x="20" y="71">"At least k people?" k = 1…n</text>
+          <rect x="12" y="80" width="202" height="30" rx="5" fill="#0f1a2b" stroke="#24406a"/>
+          <text class="tiny" x="20" y="92">box · each person</text>
+          <text class="q" x="20" y="105">"k-th person from the left"</text>
+          <rect x="12" y="114" width="202" height="54" rx="5" fill="#0f1a2b" stroke="#24406a"/>
+          <text class="tiny" x="20" y="126">noul · "is the person wearing …?"</text>
+          <text class="q" x="20" y="140">a hard hat</text>
+          <rect x="150" y="133" width="56" height="7" rx="3.5" fill="#24406a"/><rect id="m2-hat" x="150" y="133" width="0" height="7" rx="3.5" fill="#3fcf8e"/>
+          <text class="q" x="20" y="158">a hi-vis vest</text>
+          <rect x="150" y="151" width="56" height="7" rx="3.5" fill="#24406a"/><rect id="m2-vest" x="150" y="151" width="0" height="7" rx="3.5" fill="#3fcf8e"/>
+          <line x1="178" y1="130" x2="178" y2="161" stroke="#ff5a5f" stroke-width="1.4"/>
+        </g>
+
+        <use href="#p2-frame" class="wire-jev"/>
+        <use href="#p2-answer" class="wire-jev" style="stroke:#7aa7ff"/>
+        <circle id="pulse2-out" r="5" fill="#f2f4f5" opacity="0"/>
+        <circle id="pulse2-in" r="5" fill="#7aa7ff" opacity="0"/>
+        <text class="sub" x="270" y="192" text-anchor="middle" style="fill:#7aa7ff">/latest.jpg</text>
+        <text class="sub" x="270" y="206" text-anchor="middle" style="fill:#7aa7ff">1 per second</text>
+
+        <!-- gate scene -->
+        <g transform="translate(292 352)">
+          <rect x="0" y="0" width="206" height="104" rx="7" fill="#0a0c0d" stroke="#3a4249" stroke-width="2"/>
+          <rect x="7" y="7" width="192" height="90" rx="3" fill="#161b1a"/>
+          <rect x="7" y="74" width="192" height="23" fill="#1d2422"/>
+          <rect x="146" y="20" width="7" height="60" fill="#5c646c"/>
+          <g id="arm2" transform="translate(149 40)"><rect x="-74" y="-3" width="74" height="6" rx="2" fill="#e8e8e8"/><rect x="-62" y="-3" width="9" height="6" fill="#ff5a5f"/><rect x="-38" y="-3" width="9" height="6" fill="#ff5a5f"/><rect x="-14" y="-3" width="9" height="6" fill="#ff5a5f"/></g>
+          <g id="worker2" transform="translate(40 0)">
+            <rect x="-8" y="44" width="16" height="32" rx="5" fill="#8b9399"/>
+            <rect id="vest2" x="-8.5" y="48" width="17" height="18" rx="3" fill="#c7e04a"/>
+            <circle cx="0" cy="36" r="7" fill="#c9a07a"/>
+            <path id="hat2" d="M-8 34 Q0 22 8 34 Z" fill="#f2b33d"/>
+            <rect x="-6" y="76" width="4" height="12" fill="#5c646c"/><rect x="2" y="76" width="4" height="12" fill="#5c646c"/>
+          </g>
+          <rect id="sbox2" x="0" y="20" width="30" height="72" fill="none" stroke="#e8e8e8" stroke-width="2" stroke-dasharray="4 3" opacity="0"/>
+          <text id="stag2" x="0" y="16" style="font:700 8px var(--mono);fill:#e8e8e8" opacity="0">SCANNING</text>
+        </g>
+        <text class="lbl" x="506" y="370">The gate</text>
+        <text class="sub" x="506" y="385">closest person</text>
+        <text class="sub" x="506" y="398">is the one judged</text>
+        <g transform="translate(506 410)">
+          <circle id="pip2-0" cx="6" cy="6" r="5" fill="#24406a"/>
+          <circle id="pip2-1" cx="22" cy="6" r="5" fill="#24406a"/>
+          <text class="tiny" x="34" y="10">lock</text>
+        </g>
+
+        <!-- outputs -->
+        <path class="wire-out" d="M452 200 L452 268 Q452 278 462 278 L480 278"/>
+        <g transform="translate(482 238)">
+          <rect x="0" y="0" width="130" height="84" rx="8" fill="#14181a" stroke="#3a4249"/>
+          <circle cx="22" cy="24" r="13" fill="none" stroke="#24302b" stroke-width="5"/>
+          <circle id="ring2" cx="22" cy="24" r="13" fill="none" stroke="#3fcf8e" stroke-width="5" pathLength="100" stroke-dasharray="86 100" transform="rotate(-90 22 24)"/>
+          <text class="lbl" x="42" y="20">Verdict</text>
+          <text id="verdict2" class="tiny" x="42" y="34">—</text>
+          <text class="tiny" x="10" y="56">📸 entry + snapshot</text>
+          <text class="tiny" x="10" y="70">📱 ntfy push if ✗</text>
+        </g>
+      </svg>
+
+      <div class="parts">
+        <div class="part"><h3><i style="background:var(--amber)"></i>No camera of its own</h3><p>It fetches <code>http://127.0.0.1:8000/latest.jpg</code> from JevCam. Both apps run at once on the same frames.</p></div>
+        <div class="part"><h3><i style="background:var(--jev)"></i>Jev · three kinds of question</h3><p>A monotone headcount ("at least k people?"), a box for each ordinal person, and a <code>noul</code> per person per watch-list item. Boxes that land on the same person (IoU &gt; 0.6) are merged.</p></div>
+        <div class="part"><h3><i style="background:var(--green)"></i>Verdict lock</h3><p>The person closest to the camera (the biggest box) gets a SCANNING box. After <b>2</b> Jev answers the verdict locks: ✓ compliant, or ✗ with what's missing. Supervisors can amend it by clicking the chip.</p></div>
+        <div class="part"><h3><i style="background:var(--red)"></i>Evidence + alerts</h3><p>Each entry is logged with a snapshot of the real frame. Non-compliant entries raise an alert (critical if a hard hat or vest is missing) and an ntfy or Pushover push. Day and night shift stats come from 06:00 and 18:00.</p></div>
+      </div>
+      <div class="flow">
+        <ol>
+          <li><b>JevCam → PPE:</b> the newest frame from <code>/latest.jpg</code>. The watch list starts empty: you type what workers must wear.</li>
+          <li><b>PPE → Jev:</b> once a second, while a page is polling, every question goes out in one request.</li>
+          <li><b>Jev → PPE:</b> the headcount, the boxes and a probability for each item. ≥ 0.5 counts as worn.</li>
+          <li><b>PPE → gate:</b> SCANNING, then the verdict locks after 2 answers.</li>
+          <li><b>PPE → you:</b> the compliance ring, the entry log with snapshots, alerts and phone pushes.</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
+  <footer>Readings on this page are simulated. The rates and thresholds are the real ones from <code>app.py</code> (interval 1 s, threshold 0.5, alarm hold 6 s, clear hold 5 s) and <code>app2/server.js</code> (1 s vision tick, lock after 2 samples).</footer>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // GPIO header pins on both boards
+  for (const id of ["gpio1", "gpio2"]) {
+    const g = $(id);
+    let s = "";
+    for (let i = 0; i < 20; i++) for (let r = 0; r < 2; r++) s += `<rect x="${19 + i * 5.8}" y="${114 + r * 6}" width="3" height="3"/>`;
+    g.innerHTML = s;
+  }
+
+  // presence timeline bars on the JevCam dashboard
+  const bars = $("bars1");
+  bars.innerHTML = Array.from({ length: 30 }, (_, i) => `<rect x="${i * 6.1}" y="0" width="4" height="0" fill="#5c646c"/>`).join("");
+  const barEls = [...bars.children];
+  const history = [];
+
+  // move a dot along an SVG path
+  function along(pathId, dot, f) {
+    const p = document.getElementById(pathId);
+    const L = p.getTotalLength();
+    const pt = p.getPointAtLength(clamp(f, 0, 1) * L);
+    dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+  }
+  function blink(el, ms = 140) { el.setAttribute("opacity", "1"); setTimeout(() => el.setAttribute("opacity", ".25"), ms); }
+
+  // ---------------- App 1: a dog walks in and out of frame -------------
+  const A1 = { p: 0.03, lastHot: -99, ms: 0, trip: null, next: 0.3, box: null };
+  const dogX = (t) => { const c = t % 16; const ease = (x) => x * x * (3 - 2 * x);
+    if (c < 3) return -40 + 140 * ease(c / 3); if (c < 9) return 100; if (c < 12) return 100 + 150 * ease((c - 9) / 3); return 250; };
+  function app1(t) {
+    const x = dogX(t);
+    $("dog1").setAttribute("transform", `translate(${x} 0)`);
+    const inFrame = x > 20 && x < 186;
+    if (t >= A1.next && !A1.trip) {
+      A1.next += 1.0;
+      const visible = inFrame ? 1 : 0;
+      A1.trip = { t0: t, lat: rand(0.22, 0.48), p: clamp((visible ? rand(0.86, 0.98) : rand(0.01, 0.07)), 0, 1), x };
+      blink($("act1"));
+    }
+    const out = $("pulse1-out"), back = $("pulse1-in");
+    if (A1.trip) {
+      const f = (t - A1.trip.t0) / A1.trip.lat;
+      out.setAttribute("opacity", f < 0.5 ? 1 : 0); back.setAttribute("opacity", f >= 0.5 && f < 1 ? 1 : 0);
+      if (f < 0.5) along("p1-frame", out, f * 2); else along("p1-answer", back, (f - 0.5) * 2);
+      if (f >= 1) {
+        A1.p = A1.trip.p; A1.ms = Math.round(A1.trip.lat * 1000);
+        A1.box = A1.p >= 0.5 ? A1.trip.x : null;
+        if (A1.p >= 0.5) A1.lastHot = t;
+        history.push(A1.p); if (history.length > barEls.length) history.shift();
+        barEls.forEach((b, i) => { const v = history[i - (barEls.length - history.length)]; const h = v === undefined ? 0 : 1 + v * 9; b.setAttribute("height", h); b.setAttribute("y", -h); b.setAttribute("fill", v >= 0.5 ? "#3fcf8e" : "#5c646c"); });
+        blink($("jevlamp1"));
+        A1.trip = null;
+      }
+    } else { out.setAttribute("opacity", 0); back.setAttribute("opacity", 0); }
+    // dial
+    const shown = A1.p;
+    $("needle1").setAttribute("transform", `rotate(${-90 + 180 * shown})`);
+    $("dialfill1").setAttribute("stroke-dasharray", `${shown * 100} 100`);
+    $("pval1").textContent = shown.toFixed(2);
+    $("pval1").style.fill = shown >= 0.5 ? "#3fcf8e" : "#f2f4f5";
+    // box from the last sample, alarm with 6 s hold
+    $("box1").setAttribute("opacity", A1.box !== null ? 1 : 0);
+    if (A1.box !== null) $("box1").setAttribute("transform", `translate(${A1.box} 0)`);
+    const alarm = t - A1.lastHot <= 6;
+    $("band1").setAttribute("opacity", alarm ? 1 : 0);
+    $("siren1").setAttribute("opacity", alarm ? (0.55 + 0.45 * Math.abs(Math.sin(t * 6))).toFixed(2) : 0.2);
+    const hold = Math.max(0, 6 - (t - A1.lastHot));
+    $("live1").innerHTML = `<span class="dot"></span>stream 20 fps · Jev ${A1.p.toFixed(2)} · ${A1.ms || "…"} ms · ` +
+      (alarm ? `<b style="color:var(--red)">ALARM</b> (holds ${hold.toFixed(1)} s)` : "clear");
+  }
+
+  // ---------------- App 2: workers walk up to the gate ----------------
+  const plan = [{ hat: true, vest: true }, { hat: false, vest: true }, { hat: true, vest: true }, { hat: true, vest: false }];
+  const A2 = { n: 0, id: 7, w: null, phase: "idle", at: 0, x: -20, answers: [], verdict: null, trip: null, next: 0.5, hat: 0, vest: 0, ok: 6, total: 7, arm: 0 };
+  function spawn(t) {
+    A2.w = plan[A2.n++ % plan.length]; A2.id++; A2.answers = []; A2.verdict = null; A2.phase = "in"; A2.at = t;
+    $("hat2").style.display = A2.w.hat ? "" : "none"; $("vest2").style.display = A2.w.vest ? "" : "none";
+  }
+  const ease = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  function app2(t) {
+    if (A2.phase === "idle" && t > 0.6) spawn(t);
+    const s = t - A2.at;
+    if (A2.phase === "in") { A2.x = -20 + 110 * ease(s / 3); if (s > 3) { A2.phase = "scan"; A2.at = t; } }
+    if (A2.phase === "verdict" && s > 1.4) { A2.phase = A2.verdict.ok ? "pass" : "back"; A2.at = t; }
+    if (A2.phase === "pass") { A2.arm += (1 - A2.arm) * 0.12; if (s > 0.6) A2.x = 90 + 140 * ease((s - 0.6) / 2.6); if (s > 3.4) { A2.phase = "rest"; A2.at = t; } }
+    if (A2.phase === "back") { A2.x = 90 - 130 * ease((s - 0.5) / 2.6); if (s > 3.2) { A2.phase = "rest"; A2.at = t; } }
+    if (A2.phase === "rest") { A2.arm += (0 - A2.arm) * 0.12; if (s > 1.4) spawn(t); }
+    $("worker2").setAttribute("transform", `translate(${A2.x} 0)`);
+    $("arm2").setAttribute("transform", `translate(149 40) rotate(${A2.arm * 80})`);
+    const here = A2.x > 14 && A2.x < 140;
+
+    if (t >= A2.next && !A2.trip) {
+      A2.next += 1.0;
+      const yes = (has) => has ? rand(0.84, 0.97) : rand(0.04, 0.2);
+      A2.trip = { t0: t, lat: rand(0.24, 0.48), here, hat: here ? yes(A2.w.hat) : 0, vest: here ? yes(A2.w.vest) : 0 };
+      blink($("act2"));
+    }
+    const out = $("pulse2-out"), back = $("pulse2-in");
+    if (A2.trip) {
+      const f = (t - A2.trip.t0) / A2.trip.lat;
+      out.setAttribute("opacity", f < 0.5 ? 1 : 0); back.setAttribute("opacity", f >= 0.5 && f < 1 ? 1 : 0);
+      if (f < 0.5) along("p2-frame", out, f * 2); else along("p2-answer", back, (f - 0.5) * 2);
+      if (f >= 1) {
+        const a = A2.trip; A2.trip = null; A2.hat = a.hat; A2.vest = a.vest; A2.ms = Math.round(a.lat * 1000);
+        blink($("jevlamp2"));
+        if (A2.phase === "scan" && a.here) {
+          A2.answers.push(a);
+          if (A2.answers.length >= 2) {
+            const avg = (k) => A2.answers.reduce((s, x) => s + x[k], 0) / A2.answers.length;
+            const missing = [["hat", "hard hat"], ["vest", "hi-vis vest"]].filter(([k]) => avg(k) < 0.5).map(([, n]) => n);
+            A2.verdict = { ok: !missing.length, missing };
+            A2.total++; if (A2.verdict.ok) A2.ok++;
+            A2.phase = "verdict"; A2.at = t;
+          }
+        }
+      }
+    } else { out.setAttribute("opacity", 0); back.setAttribute("opacity", 0); }
+
+    for (const k of ["hat", "vest"]) { const el = $("m2-" + k); el.setAttribute("width", (A2[k] * 56).toFixed(1)); el.setAttribute("fill", A2[k] >= 0.5 ? "#3fcf8e" : "#ff5a5f"); }
+    const locked = A2.verdict && A2.phase !== "in" && A2.phase !== "scan";
+    [0, 1].forEach((i) => $("pip2-" + i).setAttribute("fill", locked ? (A2.verdict.ok ? "#3fcf8e" : "#ff5a5f") : (A2.phase === "scan" && i < A2.answers.length ? "#f2f4f5" : "#24406a")));
+    const showBox = here && (A2.phase === "scan" || locked);
+    const box = $("sbox2"), tag = $("stag2");
+    box.setAttribute("opacity", showBox ? 1 : 0); tag.setAttribute("opacity", showBox ? 1 : 0);
+    box.setAttribute("x", A2.x - 15); tag.setAttribute("x", A2.x - 15);
+    const col = locked ? (A2.verdict.ok ? "#3fcf8e" : "#ff5a5f") : "#e8e8e8";
+    box.setAttribute("stroke", col); box.setAttribute("stroke-dasharray", locked ? "0" : "4 3"); tag.style.fill = col;
+    tag.textContent = locked ? (A2.verdict.ok ? "✓ OK" : "✗ " + A2.verdict.missing[0].toUpperCase()) : "SCANNING";
+    $("ring2").setAttribute("stroke-dasharray", `${(A2.ok / A2.total) * 100} 100`);
+    $("verdict2").textContent = locked ? (A2.verdict.ok ? "✓ compliant" : "✗ missing " + A2.verdict.missing.join(", ")) : `${A2.ok}/${A2.total} compliant`;
+    $("verdict2").style.fill = locked ? (A2.verdict.ok ? "#3fcf8e" : "#ff5a5f") : "";
+    const who = "W-" + String(A2.id).padStart(2, "0");
+    let txt = "gate clear";
+    if (A2.phase === "in") txt = `${who} walking in`;
+    if (A2.phase === "scan") txt = `${who} · SCANNING ${A2.answers.length}/2`;
+    if (locked && A2.phase !== "rest") txt = `${who} · ` + (A2.verdict.ok ? `<b style="color:var(--green)">✓ compliant</b>` : `<b style="color:var(--red)">✗ missing ${A2.verdict.missing.join(", ")}</b> · ntfy sent`);
+    $("live2").innerHTML = `<span class="dot"></span>/latest.jpg 1/s · Jev ${A2.ms || "…"} ms · ${txt}`;
+  }
+
+  let t0 = 0;
+  function frame(now) {
+    if (!t0) t0 = now;
+    const t = (now - t0) / 1000;
+    app1(t); app2(t);
+    if (!reduced) requestAnimationFrame(frame);
+  }
+  if (reduced) { app1(5); app2(0.7); } else requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
