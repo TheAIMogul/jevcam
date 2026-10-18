@@ -67,22 +67,40 @@ TYPESAFE_KEY = load_key()
 # ---------------------------------------------------------------------------
 # Camera
 # ---------------------------------------------------------------------------
-from picamera2 import Picamera2  # noqa: E402
-from libcamera import Transform  # noqa: E402
+# A flaky ribbon cable can make the sensor drop out mid-run ("Camera frontend
+# has timed out"), which would block an in-process picamera2 capture forever and
+# freeze the loop. To stay resilient we capture via a short-lived rpicam-still
+# process with a hard timeout: a fresh pipeline each frame self-recovers the
+# instant the sensor comes back, and a stuck capture is killed, not hung.
+import subprocess  # noqa: E402
 
-picam = Picamera2()
-picam.configure(picam.create_still_configuration(
-    main={"size": CAP_SIZE, "format": "RGB888"},
-    transform=Transform(hflip=1, vflip=1),   # matches physical mount
-))
-picam.start()
-time.sleep(1.0)
+CAP_PATH = "/tmp/jevcam_cap.jpg"
+CAP_TIMEOUT = 12          # seconds; kill a stuck capture
+RPICAM = "rpicam-still"
 
 
 def capture_rgb():
-    """Capture a frame as a PIL RGB image."""
-    arr = picam.capture_array()            # HxWx3, RGB888
-    return Image.fromarray(arr).convert("RGB")
+    """Capture a frame to disk via rpicam-still and return it as a PIL RGB image.
+
+    Raises RuntimeError on timeout/failure (loop treats it as a transient error
+    and retries next cycle) instead of blocking forever.
+    """
+    cmd = [
+        RPICAM, "--nopreview", "-n", "-t", "900",
+        "--hflip", "--vflip",                    # matches physical mount
+        "--width", str(CAP_SIZE[0]), "--height", str(CAP_SIZE[1]),
+        "-o", CAP_PATH,
+    ]
+    try:
+        subprocess.run(cmd, check=True, timeout=CAP_TIMEOUT,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("camera capture timed out - check the ribbon cable is "
+                           "fully seated (sensor not responding)")
+    except subprocess.CalledProcessError as e:
+        msg = (e.stderr or b"").decode(errors="replace")[-200:].strip()
+        raise RuntimeError(f"camera capture failed: {msg or 'rpicam-still error'}")
+    return Image.open(CAP_PATH).convert("RGB")
 
 
 # ---------------------------------------------------------------------------
