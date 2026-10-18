@@ -112,17 +112,17 @@
   #screamer .ph{font-weight:900;letter-spacing:-.02em;line-height:1;text-align:center;
     font-size:clamp(2rem,8vw,7rem);text-transform:uppercase;
     text-shadow:0 3px 0 rgba(0,0,0,.25)}
-  #screamer .siren{font-size:clamp(2.4rem,9vw,8rem);line-height:1;animation:sirensway .55s ease-in-out infinite}
+  #screamer .siren{height:clamp(3.5rem,11vw,10rem);width:auto;flex:none;display:block}
+  #screamer .siren.flip{transform:scaleX(-1)}
   @keyframes screamflash{0%{background:#e4352b}50%{background:#000}100%{background:#e4352b}}
-  @keyframes sirensway{0%,100%{transform:rotate(-12deg) scale(1)}50%{transform:rotate(12deg) scale(1.12)}}
-  @media(prefers-reduced-motion:reduce){#screamer.show,#screamer .siren{animation:none}}
+  @media(prefers-reduced-motion:reduce){#screamer.show{animation:none}}
 </style>
 </head>
 <body>
 <div id="screamer">
-  <span class="siren">🚨</span>
+  <img class="siren" src="/static/siren.gif" alt="">
   <span class="ph" id="screamerText">ALERT</span>
-  <span class="siren">🚨</span>
+  <img class="siren flip" src="/static/siren.gif" alt="">
 </div>
 <audio id="alertAudio" preload="auto" crossorigin="anonymous"></audio>
 

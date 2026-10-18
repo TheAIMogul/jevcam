@@ -4,3 +4,6 @@ __pycache__/
 *.log
 reports/
 .DS_Store
+assets/siren-src/*.json
+assets/siren-src/preview.png
+assets/siren-src/contact.jpg
