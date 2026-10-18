@@ -19,7 +19,8 @@ with open(os.path.join(HERE, "apps.json")) as f:
     APPS = json.load(f)
 POOL = ThreadPoolExecutor(max_workers=max(2, len(APPS)))
 ASSET_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-               ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
+               ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml",
+               ".mp4": "video/mp4"}
 
 
 def probe(app):

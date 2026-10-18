@@ -91,11 +91,13 @@
   .art::before{content:"";position:absolute;left:50%;bottom:-45%;width:85%;aspect-ratio:1;translate:-50% 0;border-radius:50%;
     background:repeating-linear-gradient(180deg,rgba(255,255,255,.35) 0 9px,rgba(255,255,255,0) 9px 18px);
     mask:linear-gradient(180deg,#000 0%,#000 55%,transparent 56%);opacity:.55}
-  .art img.cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:kenburns 18s ease-in-out infinite alternate}
+  .art .cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;animation:kenburns 18s ease-in-out infinite alternate}
   @keyframes kenburns{to{transform:scale(1.12)}}
   .art.has-img::before{display:none}
   .art.has-img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,8,40,.35) 0%,rgba(20,8,40,0) 35%)}
-  .card.down .art img.cover{filter:grayscale(1) brightness(.7)}
+  .art video.cover{animation:none;opacity:0;transition:opacity .6s}
+  .art video.cover.ready{opacity:1}
+  .card.down .art .cover{filter:grayscale(1) brightness(.7)}
   .art .ic{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(56px,8vh,96px);
     filter:drop-shadow(0 10px 18px rgba(40,10,60,.35));animation:float 4s ease-in-out infinite}
   @keyframes float{50%{translate:0 -8px}}
@@ -201,6 +203,7 @@ function render(){
     <button class="card" id="card-${a.id}" data-i="${i}" style="--g1:${g1};--g2:${g2};--accent:${accent}" aria-label="Open ${esc(a.name)}">
       <div class="art${a.image ? " has-img" : ""}">
         ${a.image ? `<img class="cover" src="/assets/${esc(a.image)}" style="object-position:${esc(a.imagePos || "center")}" alt="">` : `<div class="ic">${a.icon || ""}</div>`}
+        ${a.video && !reduced ? `<video class="cover" src="/assets/${esc(a.video)}" style="object-position:${esc(a.imagePos || "center")}" autoplay muted loop playsinline preload="auto" aria-hidden="true"></video>` : ""}
         <span class="num">${i + 1}</span>
         <span class="status" id="st-${a.id}"><i></i><span>checking&hellip;</span></span>
       </div>
@@ -213,6 +216,9 @@ function render(){
       </div>
     </button>`;
   }).join("");
+  // the looping Grok clip fades in over the still once it can play
+  document.querySelectorAll(".art video").forEach(v =>
+    v.addEventListener("playing", () => v.classList.add("ready"), {once: true}));
   document.querySelectorAll(".card").forEach(c => {
     c.addEventListener("click", () => launch(+c.dataset.i));
     c.addEventListener("mouseenter", () => select(+c.dataset.i));
@@ -255,6 +261,7 @@ function launch(i, fromHistory){
   }
   openId = a.id;
   document.body.classList.add("app-open");      // pause the scene while an app runs
+  document.querySelectorAll(".art video").forEach(v => v.pause());
   $("#frame").src = appUrl(a);
   $("#shell").classList.add("on");
   document.title = `${a.name} · pi-07`;
@@ -266,6 +273,7 @@ function closeApp(fromHistory){
   if(!openId) return;
   openId = null;
   document.body.classList.remove("app-open");
+  document.querySelectorAll(".art video").forEach(v => v.play().catch(() => {}));
   $("#shell").classList.remove("on");
   $("#frame").src = "about:blank";          // stops the app's video stream
   document.title = "pi-07 Apps";

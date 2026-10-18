@@ -10,6 +10,7 @@
     "accent": "#2563eb",
     "icon": "🎯",
     "image": "card_jevcam.webp",
+    "video": "card_jevcam.mp4",
     "imagePos": "72% 28%"
   },
   {
@@ -23,6 +24,7 @@
     "accent": "#d97706",
     "icon": "⛑️",
     "image": "card_ppe.webp",
+    "video": "card_ppe.mp4",
     "imagePos": "28% 22%"
   }
 ]
