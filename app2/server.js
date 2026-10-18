@@ -2,10 +2,11 @@
 //
 // What is real here:
 //   * the live frame, proxied from JevCam (the Flask app on :8000 that owns the camera)
-//   * JevCam's person detection boxes, when it reports any
+//   * PPE checks: /api/vision asks TypeSafe Jev about the person at the gate, once a
+//     second, for every item on the page's watch list
 //   * ntfy / Pushover pushes, when a topic or keys are configured in Settings
 // What is simulated here:
-//   * worker entries and per-item PPE detections (hard hat, vest, glasses, gloves)
+//   * the seeded history and the server-side demo entries (/api/demo/*)
 //
 // Only Node built-ins. Listens on process.env.PORT (3000); nginx fronts it on :80.
 
@@ -243,6 +244,83 @@ scheduleCamera();
 pollCamera();
 
 // ---------------------------------------------------------------------------
+// Vision: real PPE checks with TypeSafe Jev on JevCam's live frames
+// ---------------------------------------------------------------------------
+// The page posts its active watch list to /api/vision/items. Once a second, while
+// a page is polling /api/vision, the newest JevCam frame goes to Jev with one
+// question per item about the person closest to the camera. App 2 asks its own
+// questions, so it never changes JevCam's target list.
+const TYPESAFE_KEY = (() => {
+  try { return fs.readFileSync(path.join(os.homedir(), '.config/typesafe/api-key'), 'utf8').trim(); } catch { return ''; }
+})();
+const VISION_INTERVAL_MS = 1000;
+const VISION_IDLE_MS = 30000;   // stop asking Jev when no page has polled for this long
+const WHO = 'the person closest to the camera';
+const vision = { items: [], lastPoll: 0, busy: false, seq: 0, ts: null, latency_ms: null, error: null, person: null, det: {}, frame: null };
+
+function askJev(body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = https.request('https://api.typesafe.ai/v1/systemone', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TYPESAFE_KEY}`, 'Content-Type': 'application/json',
+        'TypeSafe-Danger-Zone-Images': 'true', 'Content-Length': Buffer.byteLength(data),
+      },
+    }, (res) => {
+      let out = '';
+      res.on('data', (c) => (out += c));
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error(`Jev ${res.statusCode}: ${out.slice(0, 160)}`));
+        try { resolve(JSON.parse(out)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(20000, () => req.destroy(new Error('Jev timeout')));
+    req.end(data);
+  });
+}
+
+async function visionTick() {
+  if (vision.busy || !TYPESAFE_KEY || Date.now() - vision.lastPoll > VISION_IDLE_MS) return;
+  vision.busy = true;
+  const t0 = Date.now();
+  try {
+    const f = await fetchBuffer(`${JEVCAM}/latest.jpg`);
+    if (f.status !== 200 || f.body.length < 1000) throw new Error('JevCam has no frame (camera offline?)');
+    const questions = {
+      person: { type: 'noul', instructions: 'Is there a person clearly visible in `photo`?' },
+      person_box: { type: 'box', instructions: `${WHO} in \`photo\`` },
+    };
+    for (const it of vision.items) {
+      questions[`item_${it.id}`] = { type: 'noul', instructions: `Is ${WHO} in \`photo\` wearing ${it.desc}?` };
+    }
+    const r = await askJev({
+      model: 'jev-preview', state: { photo: 'frame' },
+      assets: { frame: { type: 'image', format: 'jpg', data_base64: f.body.toString('base64') } },
+      questions,
+    });
+    const a = r.answers || {};
+    const det = {};
+    for (const it of vision.items) {
+      const p = (a[`item_${it.id}`] || {}).noul;
+      if (p != null) det[it.id] = { present: p >= 0.5, conf: round2(p), name: it.name };
+    }
+    const pb = a.person_box || {};
+    Object.assign(vision, {
+      seq: vision.seq + 1, ts: new Date().toISOString(), latency_ms: Date.now() - t0, error: null, frame: f.body, det,
+      person: { presence: (a.person || {}).noul ?? null, box: pb.box || null, box_conf: pb.confidence ?? null },
+    });
+  } catch (e) {
+    vision.error = e.message;
+    vision.latency_ms = Date.now() - t0;
+  } finally {
+    vision.busy = false;
+  }
+}
+setInterval(visionTick, VISION_INTERVAL_MS);
+
+// ---------------------------------------------------------------------------
 // Notifications (ntfy / Pushover) - real pushes, only when configured
 // ---------------------------------------------------------------------------
 function postRequest(url, body, headers) {
@@ -419,6 +497,27 @@ const server = http.createServer(async (req, res) => {
     const cam = setInterval(() => res.write(`event: camera\ndata: ${JSON.stringify({ available: camera.available, lastFrameAt: camera.lastFrameAt, error: camera.error, persons: camera.persons })}\n\n`), 2000);
     req.on('close', () => { clearInterval(ping); clearInterval(cam); sseClients.delete(res); });
     return;
+  }
+
+  if (p === '/api/vision') {
+    vision.lastPoll = Date.now();
+    const { frame, busy, lastPoll, ...pub } = vision;
+    return json(res, 200, { ...pub, enabled: !!TYPESAFE_KEY });
+  }
+
+  if (p === '/api/vision/frame.jpg') {
+    if (!vision.frame) { res.writeHead(503, { 'Cache-Control': 'no-store' }); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
+    return res.end(vision.frame);
+  }
+
+  if (p === '/api/vision/items' && req.method === 'POST') {
+    const { items } = await readBody(req);
+    vision.items = (Array.isArray(items) ? items : [])
+      .filter((i) => i && i.id && i.desc).slice(0, 8)
+      .map((i) => ({ id: String(i.id).slice(0, 40), name: String(i.name || i.id).slice(0, 60), desc: String(i.desc).slice(0, 140) }));
+    vision.det = {};   // answers for the old list no longer apply
+    return json(res, 200, { items: vision.items });
   }
 
   if (p === '/api/frame.jpg') {

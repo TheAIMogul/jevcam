@@ -67,6 +67,9 @@
   .feed.alarm { box-shadow: 0 0 0 2px rgba(255,90,90,.9), 0 0 60px rgba(255,60,60,.35); animation: pulse 1s ease-in-out 4; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 2px rgba(255,90,90,.4), 0 0 24px rgba(255,60,60,.15); } }
   .feed canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .feed img.live { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+  .feed.is-live img.live { display: block; }
+  .feed.is-live #scene { visibility: hidden; }
   .hud { position: absolute; left: 14px; top: 12px; display: flex; gap: 10px; align-items: center; font: 500 11px var(--mono); color: #d9e2ec; text-shadow: 0 1px 2px #000; letter-spacing: .04em; }
   .hud .rec { width: 8px; height: 8px; border-radius: 50%; background: #ff4d4d; animation: blink 1.2s steps(2) infinite; }
   @keyframes blink { to { opacity: .25; } }
@@ -270,9 +273,10 @@
       </div>
       <div class="feed" id="feed">
         <canvas id="scene"></canvas>
+        <img class="live" id="live" alt="Live camera">
         <canvas id="overlay"></canvas>
         <div class="hud"><span class="rec"></span> LIVE · CAM 01 · NoIR</div>
-        <div class="hud-r">1920×1080 · 25 FPS · IR · <span id="hudScan"></span></div>
+        <div class="hud-r"><span id="hudRes">SIMULATED · 1920×1080 · 25 FPS · IR</span> · <span id="hudScan"></span></div>
         <div class="hud-b" id="hudTime"></div>
         <div class="banner" id="banner"><div class="ic">!</div><div><div class="t" id="bannerT">NON-COMPLIANT ENTRY</div><div class="d" id="bannerD"></div></div><span class="push" id="bannerPush"></span></div>
       </div>
@@ -508,6 +512,97 @@
   const feed = $('#feed'), scene = $('#scene'), overlay = $('#overlay');
   const sctx = scene.getContext('2d'), octx = overlay.getContext('2d');
   let W = 960, H = 540, grain, scan;
+
+  // ------------------------------------------------------------------ live camera + Jev
+  // Served from the Pi (server.js), the feed shows JevCam's live stream and the server's Jev
+  // checks of the person at the gate. Opened as a plain file, or with the camera or Jev down,
+  // it falls back to the simulated scene.
+  const liveImg = $('#live');
+  const served = /^http/.test(location.protocol);
+  const STREAM = `${location.protocol}//${location.hostname || 'localhost'}:8000/stream.mjpg`;
+  const LOCK_SAMPLES = 2;   // Jev answers before a live entry's verdict locks (about 2 s)
+  const CLEAR_MS = 4000;    // the gate must be empty this long before the next person counts
+  let vision = null, camErr = false, lastSeq = -1, lastSeenAt = 0, liveTrack = null;
+  const liveMode = () => served && liveImg.naturalWidth > 0 && !!vision && vision.enabled && !camErr;
+
+  function connectStream() { if (served) liveImg.src = `${STREAM}?t=${Date.now()}`; }
+  liveImg.addEventListener('error', () => setTimeout(connectStream, 5000));
+
+  function syncVision() {
+    if (!served) return;
+    const items = activeItems(new Date()).map((i) => ({ id: i.id, name: i.name, desc: i.desc || i.name.toLowerCase() }));
+    fetch('/api/vision/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) }).catch(() => {});
+  }
+
+  async function pollVision() {
+    let v = null;
+    try {
+      const r = await fetch('/api/vision', { cache: 'no-store' });
+      if (r.ok) v = await r.json();
+    } catch { /* not served by server.js, or the Pi is unreachable */ }
+    vision = v;
+    camErr = !!v && !!v.error && /JevCam|camera/i.test(v.error);
+    if (v && v.seq !== lastSeq) {
+      lastSeq = v.seq;
+      try { onVision(v); } catch (err) { console.error('live vision:', err); feed.dataset.visionError = String((err && err.stack) || err); }
+    }
+    $('#hudRes').textContent = liveMode()
+      ? `LIVE · ${liveImg.naturalWidth}×${liveImg.naturalHeight} · JEV ${vision.error ? 'ERROR' : (vision.latency_ms || '–') + 'ms'}`
+      : 'SIMULATED · 1920×1080 · 25 FPS · IR';
+  }
+
+  // One live entry per person: SCANNING while Jev answers come in, then the verdict locks.
+  function onVision(v) {
+    if (!liveMode() || v.error) return;
+    const p = v.person || {}, now = Date.now();
+    if (p.presence != null && p.presence >= 0.5) {
+      lastSeenAt = now;
+      if (!liveTrack) { liveTrack = { worker: pick(workers), samples: [], entry: null }; showVerdict({ worker: liveTrack.worker }, 'scan'); }
+      if (!liveTrack.entry) {
+        liveTrack.samples.push(v.det || {});
+        if (liveTrack.samples.length >= LOCK_SAMPLES) lockLive(p.box);
+      }
+    } else if (liveTrack && now - lastSeenAt > CLEAR_MS) {
+      liveTrack = null;
+    }
+  }
+  function lockLive(personBox) {
+    // average each item over the samples, so one shaky frame can't flip the verdict
+    const det = {};
+    for (const it of settings.items) {
+      const vals = liveTrack.samples.map((s) => s[it.id]).filter(Boolean).map((d) => d.conf);
+      if (!vals.length) continue;
+      const conf = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100;
+      det[it.id] = { present: conf >= 0.5, conf, name: it.name };
+    }
+    const when = new Date(), v = evaluate(det, when);
+    const e = { id: Math.random().toString(36).slice(2, 9), ts: when, worker: liveTrack.worker, shift: shiftOf(when), det, ok: v.ok, missing: v.missing, severity: v.severity, seed: Math.random(), photo: null, pushed: null };
+    liveTrack.entry = e;
+    snapshot(e, personBox).finally(() => commit(e));
+  }
+  // Evidence photo: the frame Jev judged, with the verdict box drawn on it.
+  async function snapshot(e, bx) {
+    try {
+      const r = await fetch('/api/vision/frame.jpg', { cache: 'no-store' });
+      if (!r.ok) return;
+      const img = await createImageBitmap(await r.blob());
+      const c = document.createElement('canvas'); c.width = 960; c.height = 540; const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 960, 540);
+      if (bx) drawBoxes(ctx, [{ x: bx.left * 960, y: bx.top * 540, w: (bx.right - bx.left) * 960, h: (bx.bottom - bx.top) * 540, entry: e, scanning: false }], getComputedStyle(document.body).fontFamily);
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 514, 960, 26);
+      ctx.fillStyle = '#d9e2ec'; ctx.font = '500 13px ui-monospace, monospace'; ctx.fillText(`CAM 01 · ${settings.site} · ${e.ts.toLocaleString()} · ${e.worker}`, 10, 531);
+      e.photo = c.toDataURL('image/jpeg', .72);
+    } catch { /* still() draws the simulated evidence instead */ }
+  }
+  // Jev's person box mapped onto the feed (the stream is shown with object-fit: cover).
+  function liveBox() {
+    const p = vision && vision.person;
+    if (!liveTrack || !p || !p.box || !(p.presence >= 0.5)) return null;
+    const iw = liveImg.naturalWidth, ih = liveImg.naturalHeight, s = Math.max(W / iw, H / ih);
+    const dx = (W - iw * s) / 2, dy = (H - ih * s) / 2, b = p.box;
+    return { x: dx + b.left * iw * s, y: dy + b.top * ih * s, w: (b.right - b.left) * iw * s, h: (b.bottom - b.top) * ih * s,
+      entry: liveTrack.entry || { worker: liveTrack.worker }, scanning: !liveTrack.entry };
+  }
   function size() {
     const r = feed.getBoundingClientRect(); const dpr = Math.min(2, devicePixelRatio || 1);
     W = Math.max(320, Math.round(r.width)); H = Math.max(180, Math.round(r.height));
@@ -650,17 +745,22 @@
   const LOCK_AT = 0.4; // fraction of the walk where the worker reaches the gate line
   function tick(now) {
     frame++;
-    background(sctx, W, H);
+    const live = liveMode();
+    feed.classList.toggle('is-live', live);
+    if (!live) background(sctx, W, H);
     const boxes = [];
+    // simulated walkers (auto arrivals, or the C / N demo keys) still commit while live, but
+    // are only drawn over the simulated scene
     for (let i = walkers.length - 1; i >= 0; i--) {
       const wk = walkers[i]; const p = (now - wk.t0) / wk.dur;
       if (p >= 1) { walkers.splice(i, 1); continue; }
       const x = W * (1.14 - p * 1.3), baseY = H * .9 - wk.entry.seed * H * .04, h = H * .58;
-      worker(sctx, x, baseY, h, wk.entry.det, wk.entry.seed, p * 7);
+      if (!live) worker(sctx, x, baseY, h, wk.entry.det, wk.entry.seed, p * 7);
       if (!wk.locked && p >= LOCK_AT) { wk.locked = true; commit(wk.entry); }
-      if (p > 0.06) boxes.push({ ...box(x, baseY, h), entry: wk.entry, scanning: !wk.locked });
+      if (!live && p > 0.06) boxes.push({ ...box(x, baseY, h), entry: wk.entry, scanning: !wk.locked });
     }
-    post(sctx, W, H, frame);
+    if (live) { const b = liveBox(); if (b) boxes.push(b); }
+    else post(sctx, W, H, frame);
     octx.clearRect(0, 0, W, H);
     drawBoxes(octx, boxes, getComputedStyle(document.body).fontFamily);
     requestAnimationFrame(tick);
@@ -684,7 +784,8 @@
   // ------------------------------------------------------------------ flow
   let autoTimer = null;
   // Workers are only noticed on a scan tick, so the next arrival snaps to a multiple of the scan interval.
-  function schedule() { clearTimeout(autoTimer); const step = settings.scanSec * 1000; autoTimer = setTimeout(() => { spawn(); schedule(); }, Math.ceil(rnd(14000, 30000) / step) * step); }
+  // While the live camera is on, real people make the entries, so simulated arrivals pause.
+  function schedule() { clearTimeout(autoTimer); const step = settings.scanSec * 1000; autoTimer = setTimeout(() => { if (!liveMode()) spawn(); schedule(); }, Math.ceil(rnd(14000, 30000) / step) * step); }
   // One worker in the scan zone at a time: extra requests queue up and follow a beat later.
   const queue = [];
   function spawn(force) { queue.push(force); schedule(); pump(); }
@@ -784,7 +885,7 @@
   const setOn = (n, v) => n.setAttribute('aria-checked', v ? 'true' : 'false');
   function reapply() {
     for (const e of entries) { const v = evaluate(e.det, e.ts); e.ok = v.ok; e.missing = v.missing; e.severity = v.severity; e.photo = null; }
-    $('#siteName').textContent = settings.site; saveSettings(); render(); if (lastEntry) showVerdict(lastEntry);
+    $('#siteName').textContent = settings.site; saveSettings(); syncVision(); render(); if (lastEntry) showVerdict(lastEntry);
   }
 
   // ------------------------------------------------------------------ watch list card
@@ -880,7 +981,8 @@
   setInterval(() => { const d = new Date(); $('#clock').textContent = hhmmss(d); $('#hudTime').textContent = `${d.toLocaleDateString()} ${hhmmss(d)}`; }, 1000);
 
   size(); seed(); $('#siteName').textContent = settings.site; scanHelp(); render(); showVerdict(null);
-  setTimeout(() => spawn(), 1800);
+  connectStream(); syncVision(); pollVision(); setInterval(pollVision, 700);
+  setTimeout(() => { if (liveMode()) schedule(); else spawn(); }, 4000);
 })();
 </script>
 </body>

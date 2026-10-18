@@ -26,12 +26,21 @@ The two buttons next to **Demo** in the top bar do the same as `C` / `N`.
 
 ## What is real vs simulated
 
-Simulated: the camera scene, the workers and the per-item detections.
-Real: everything downstream (verdict, stats, shift tracking, alert log), and
-phone pushes via ntfy when a topic is set in Settings.
+Served from the Pi by `server.js` (the `app2` service on port 3001):
 
-On the Pi, each watch-list item's description is meant to go verbatim to the
-vision model as a detection target (JevCam's `/api/config` takes up to 8).
+- **Real:** the live feed is JevCam's 20 fps stream (`:8000/stream.mjpg`). Once a
+  second, `server.js` sends JevCam's newest frame to TypeSafe Jev and asks about
+  *the person closest to the camera*: is someone there, where are they, and are
+  they wearing each active watch-list item (the item's description goes in
+  verbatim). A person gets a yellow *SCANNING* box; after two answers the verdict
+  locks green or red and the entry is logged with a snapshot of the real frame.
+  The gate has to be empty for 4 s before the next person counts.
+- **Simulated:** the seeded history behind today's numbers, and the `C` / `N`
+  demo keys. Automatic simulated arrivals pause while the live camera is on.
+
+App 2 asks Jev its own questions, so it never changes JevCam's target list.
+Opened as a plain file, or with the camera or Jev down, the page falls back to
+the drawn scene and simulated workers.
 
 ## Watch list
 

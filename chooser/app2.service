@@ -1,0 +1,16 @@
+[Unit]
+Description=App 2 - PPE Monitor (port 3001)
+After=network-online.target jevcam.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hacker7
+WorkingDirectory=/home/hacker7/app2
+Environment=PORT=3001
+ExecStart=/usr/bin/node /home/hacker7/app2/server.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "app1",
+    "kind": "jevcam",
+    "name": "JevCam",
+    "tagline": "Live object detection",
+    "description": "Type what to look for in plain English. Jev finds it on the live camera and sounds the alarm when it shows up.",
+    "port": 8000,
+    "health": "/api/state",
+    "accent": "#2563eb",
+    "icon": "🎯"
+  },
+  {
+    "id": "app2",
+    "kind": "ppe",
+    "name": "PPE Monitor",
+    "tagline": "Site-entry safety compliance",
+    "description": "Checks every worker at the gate for hard hat, vest, glasses and gloves, with live alerts and shift stats.",
+    "port": 3001,
+    "health": "/api/health",
+    "accent": "#d97706",
+    "icon": "⛑️"
+  }
+]

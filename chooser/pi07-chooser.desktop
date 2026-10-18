@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=pi-07 app chooser
+Comment=Open the app chooser full-screen at login
+Exec=/home/hacker7/chooser/kiosk.sh
+X-GNOME-Autostart-enabled=true

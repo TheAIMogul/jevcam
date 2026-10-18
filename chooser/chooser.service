@@ -1,0 +1,15 @@
+[Unit]
+Description=pi-07 app chooser (port 8080)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hacker7
+WorkingDirectory=/home/hacker7/chooser
+ExecStart=/usr/bin/python3 /home/hacker7/chooser/chooser.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
