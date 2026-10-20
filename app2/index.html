@@ -1033,7 +1033,7 @@
     $('#bannerPush').textContent = settings.push.on && settings.push.topic ? 'Sending to phone…' : '';
     $('#banner').classList.add('show');
     clearTimeout(alarm.t); alarm.t = setTimeout(() => $('#banner').classList.remove('show'), 6000);
-    if (settings.sound) beep();
+    if (settings.sound && document.visibilityState === 'visible') beep();
     if (settings.push.on && settings.push.topic) push(e).then((r) => { e.pushed = r; $('#bannerPush').textContent = r === 'sent' ? '✓ Pushed to phone' : 'Push failed'; render(); });
   }
   async function push(e, test) {
@@ -1042,6 +1042,11 @@
     catch (err) { return `failed (${err.message})`; }
   }
   let audio;
+  // Alerts belong to the page on screen: hiding the tab or switching apps in the chooser silences PPE.
+  function silence() { $('#banner').classList.remove('show'); if (audio && audio.state === 'running') audio.suspend().catch(() => {}); }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') silence(); else if (audio && audio.state === 'suspended') audio.resume().catch(() => {}); });
+  window.addEventListener('pagehide', silence);
+  window.addEventListener('message', (ev) => { if (ev.data && ev.data.type === 'app:silence') silence(); });
   function beep() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); const o = audio.createOscillator(), g = audio.createGain(); o.type = 'triangle'; o.frequency.value = 740; g.gain.value = .08; o.connect(g); g.connect(audio.destination); o.start(); o.frequency.setValueAtTime(520, audio.currentTime + .14); g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .4); o.stop(audio.currentTime + .4); } catch { /* no audio */ } }
 
   // ------------------------------------------------------------------ render
@@ -1254,5 +1259,7 @@
   setTimeout(() => { if (liveMode()) schedule(); else spawn(); }, 4000);
 })();
 </script>
+<script>/* browser camera when JevCam runs off the Pi (see static/browsercam.js) */
+(() => { const s = document.createElement("script"); s.src = `${location.protocol}//${location.hostname}:8000/cam.js`; document.head.appendChild(s); })();</script>
 </body>
 </html>

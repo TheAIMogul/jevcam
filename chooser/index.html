@@ -186,7 +186,7 @@
   </footer>
 </main>
 
-<div class="shell" id="shell"><iframe id="frame" title="App" allow="autoplay; fullscreen; geolocation"></iframe></div>
+<div class="shell" id="shell"><iframe id="frame" title="App" allow="autoplay; fullscreen; geolocation; camera"></iframe></div>
 <button class="back" id="back" aria-label="Back to the app chooser">&#8962; Apps</button>
 <div class="toast" id="toast" role="status"></div>
 
@@ -257,8 +257,18 @@ function toast(msg){
   clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 3500);
 }
 
+function freshFrame(){
+  const old = $("#frame");
+  try{ old.contentWindow.postMessage({type: "app:silence"}, "*"); }catch(e){}
+  const next = document.createElement("iframe");
+  next.id = old.id; next.title = old.title; next.setAttribute("allow", old.getAttribute("allow"));
+  old.replaceWith(next);                     // removing the frame ends the old app's page entirely
+  return next;
+}
+
 function launch(i, fromHistory){
   const a = apps[i]; if(!a) return;
+  if(openId === a.id) return;
   select(i);
   if(status[a.id] && !status[a.id].up){
     toast(`${a.name} isn't running yet. It starts automatically, so try again in a moment.`);
@@ -267,7 +277,7 @@ function launch(i, fromHistory){
   openId = a.id;
   document.body.classList.add("app-open");      // pause the scene while an app runs
   document.querySelectorAll(".art video").forEach(v => v.pause());
-  $("#frame").src = appUrl(a);
+  freshFrame().src = appUrl(a);
   $("#shell").classList.add("on");
   document.title = `${a.name} · pi-07`;
   if(!fromHistory) history.pushState({app: a.id}, "", "#" + a.id);
@@ -280,7 +290,7 @@ function closeApp(fromHistory){
   document.body.classList.remove("app-open");
   document.querySelectorAll(".art video").forEach(v => v.play().catch(() => {}));
   $("#shell").classList.remove("on");
-  $("#frame").src = "about:blank";          // stops the app's video stream
+  freshFrame();                              // ends the app's page: video stream, alerts, timers
   document.title = "pi-07 Apps";
   if(!fromHistory && location.hash) history.pushState({}, "", location.pathname);
   refresh();
@@ -291,7 +301,7 @@ function openAnatomy(fromHistory){
   openId = "anatomy";
   document.body.classList.add("app-open");
   document.querySelectorAll(".art video").forEach(v => v.pause());
-  $("#frame").src = "/anatomy";
+  freshFrame().src = "/anatomy";
   $("#shell").classList.add("on");
   document.title = "How it works · pi-07";
   if(!fromHistory) history.pushState({app: "anatomy"}, "", "#anatomy");
@@ -364,5 +374,7 @@ if(!reduced){ setTimeout(spawnFlock, 1200); setInterval(() => { if(Math.random()
   else if(location.hash === "#anatomy") openAnatomy(true);
 })();
 </script>
+<script>/* browser camera when JevCam runs off the Pi (see static/browsercam.js) */
+(() => { const s = document.createElement("script"); s.src = `${location.protocol}//${location.hostname}:8000/cam.js`; document.head.appendChild(s); })();</script>
 </body>
 </html>

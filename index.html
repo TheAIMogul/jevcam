@@ -237,7 +237,7 @@
       <div class="vtag tl"><i></i>LIVE · NoIR</div>
       <div class="vtag bl" id="vtagBL"></div>
       <div class="vtag br" id="vtagBR"></div>
-      <div class="offline"><div class="spin"></div>Camera offline<small>Reconnecting to the sensor&hellip; check the ribbon cable is fully seated.</small></div>
+      <div class="offline"><div class="spin"></div>Camera offline<small id="offlineHint">Reconnecting to the sensor&hellip; check the ribbon cable is fully seated.</small></div>
     </div>
   </section>
 
@@ -388,12 +388,24 @@ function initAudio(){
 }
 ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, () => { initAudio(); if(actx && actx.state === "suspended") actx.resume(); }, {passive: true}));
 function loadAlertAudio(p){ if(!p || p === loadedPhrase) return; loadedPhrase = p; audioEl.src = "/api/alert_audio?phrase=" + encodeURIComponent(p); }
+// Alerts belong to the page on screen. A hidden tab, a background window, or the chooser
+// switching to another app silences this one at once.
+const onScreen = () => document.visibilityState === "visible";
+function silence(){
+  try{ audioEl.pause(); audioEl.currentTime = 0; }catch(e){}
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  lastSpoke = 0;
+}
+document.addEventListener("visibilitychange", () => { if(!onScreen()) silence(); });
+window.addEventListener("pagehide", silence);
+window.addEventListener("message", e => { if(e.data && e.data.type === "app:silence") silence(); });
 function speak(text){
-  if(muted) return;
+  if(muted || !onScreen()) return false;
   initAudio(); if(actx && actx.state === "suspended") actx.resume();
   try{ audioEl.currentTime = 0; }catch(e){}
   const p = audioEl.play();
-  if(p && p.catch) p.catch(() => { if(window.speechSynthesis){ const u = new SpeechSynthesisUtterance(text); speechSynthesis.cancel(); speechSynthesis.speak(u); } });
+  if(p && p.catch) p.catch(() => { if(window.speechSynthesis && onScreen()){ const u = new SpeechSynthesisUtterance(text); speechSynthesis.cancel(); speechSynthesis.speak(u); } });
+  return true;
 }
 
 // ---------------------------------------------------------------- map (real-time location)
@@ -515,7 +527,7 @@ function updateAlarm(al, cfg){
   $("#abText").textContent = active ? `⚠ ${phrase}` + (muted ? " · muted" : "")
     : al.enabled === false ? "Alarm disarmed"
     : `Armed · ${phrase} · watching for ${al.target || cfg.alert_target || "—"}`;
-  if(active){ if(!muted && Date.now() - lastSpoke >= SPEAK_EVERY){ speak(phrase); lastSpoke = Date.now(); } }
+  if(active){ if(!muted && Date.now() - lastSpoke >= SPEAK_EVERY && speak(phrase)) lastSpoke = Date.now(); }
   else lastSpoke = 0;
   return active;
 }
@@ -530,6 +542,7 @@ async function poll(){
   if(S.frame_seq !== lastFrame){ if(lastFrame !== null) blink($("#ledFrame")); lastFrame = S.frame_seq; }
   const wasOff = $("#feed").classList.contains("off");
   $("#feed").classList.toggle("off", camOff);
+  if(S.camera_source === "browser") $("#offlineHint").textContent = "Waiting for the browser camera… allow camera access when the browser asks.";
   if(wasOff && !camOff) reconnectStream();
   $("#chCam").classList.toggle("bad", camOff);
   $("#chCamV").textContent = camOff ? "OFFLINE" : (cfg.running === false ? "PAUSED" : "LIVE");
@@ -623,5 +636,6 @@ tick(); setInterval(tick, 1000);
 poll(); setInterval(poll, 500);
 pollTimeline(); setInterval(pollTimeline, 2000);
 </script>
+<script src="/cam.js"></script>
 </body>
 </html>

@@ -13,6 +13,7 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -34,6 +35,10 @@ STREAM_QUALITY = 70              # MJPEG quality
 STALL_SECS = 3.0                 # no frames this long -> restart the camera stream
 PRESENCE_DRAW_THRESHOLD = 0.5    # draw a box only if presence noul >= this
 BOX_CONF_FLOOR = 0.15            # and box confidence >= this
+# Where frames come from: "pi" runs rpicam-vid on the Pi camera; "browser" takes
+# JPEG frames that a page posts to /api/frame from its own webcam (getUserMedia),
+# so the app runs on a laptop. Defaults to "pi" when rpicam-vid exists.
+CAMERA_SOURCE = os.environ.get("JEVCAM_CAMERA") or ("pi" if shutil.which("rpicam-vid") else "browser")
 # Jev's presence can hover around 50% and flip every sample. Hold an alarm on for
 # a few seconds after the last sample over the threshold, and only log a target
 # as cleared after it has been missing this long, so neither flickers.
@@ -212,6 +217,9 @@ class Camera:
         self._times = deque(maxlen=120)
 
     def start(self):
+        if CAMERA_SOURCE == "browser":       # frames arrive on /api/frame instead
+            self.error = "waiting for the browser camera - open the page and allow camera access"
+            return
         threading.Thread(target=self._run, daemon=True).start()
         threading.Thread(target=self._watchdog, daemon=True).start()
 
@@ -443,6 +451,33 @@ def index():
     return send_file(os.path.join(HERE, "index.html"))
 
 
+@app.route("/api/frame", methods=["POST", "OPTIONS"])
+def api_frame():
+    """A frame from the browser camera (browser mode only)."""
+    if request.method == "OPTIONS":
+        return _cors(Response(status=204))
+    if CAMERA_SOURCE != "browser":
+        return _cors(Response("camera source is the Pi camera", status=409))
+    jpg = request.get_data(cache=False)
+    if not jpg.startswith(b"\xff\xd8") or len(jpg) > 4_000_000:
+        return _cors(Response("expected one JPEG", status=400))
+    cam._publish(jpg)
+    return _cors(Response(status=204))
+
+
+@app.route("/cam.js")
+def cam_js():
+    return _cors(send_file(os.path.join(HERE, "static", "browsercam.js"),
+                           mimetype="text/javascript", max_age=0))
+
+
+def _cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
+
+
 @app.route("/stream.mjpg")
 def stream():
     def gen():
@@ -491,9 +526,11 @@ def api_state():
         s["config"] = dict(config)
     s["stream_fps"] = cam.fps()
     s["camera_ok"] = cam.ok()
+    s["camera_source"] = CAMERA_SOURCE
     if not s["camera_ok"]:
-        s["error"] = cam.error or "camera offline - check the ribbon cable"
-    return jsonify(s)
+        s["error"] = cam.error or ("browser camera stopped - keep the page open with camera access allowed"
+                                   if CAMERA_SOURCE == "browser" else "camera offline - check the ribbon cable")
+    return _cors(jsonify(s))
 
 
 @app.route("/api/timeline")
